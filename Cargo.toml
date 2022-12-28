@@ -1,0 +1,20 @@
+[package]
+name = "Asyncached"
+version = "0.1.0"
+authors = ["Nicolas Fraison <nfraison@yahoo.fr>"]
+edition = "2021"
+
+[[bin]]
+name = "server"
+path = "src/bin/server.rs"
+
+[dependencies]
+# Log
+tracing = "0.1"
+# Prometheus
+prometheus = { version = "0", features = ["process"] }
+lazy_static = "1"
+poem = "1"
+
+[profile.release]
+lto = true
