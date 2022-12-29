@@ -68,6 +68,7 @@ dependencies = [
  "argparse",
  "console-subscriber",
  "lazy_static",
+ "num_cpus",
  "poem",
  "prometheus",
  "tokio",

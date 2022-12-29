@@ -1,18 +1,37 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
+use asyncached::Error;
+
+use std::thread;
+
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Receiver;
 use tracing::error;
 
-use asyncached::metrics::init_prometheus_http_endpoint;
+use asyncached::command::CommandProcess;
 
-fn main() -> Result<(), i32> {
+use asyncached::metrics::init_prometheus_http_endpoint;
+use asyncached::reader::SocketReader;
+
+fn main() -> Result<(), Error> {
     // install global collector configured based on RUST_LOG env var.
     tracing_subscriber::fmt::init();
 
+    let mut cpus = num_cpus::get();
+    let mut port = 6379;
     let mut http_port = 8080;
     let mut tokio_console = false;
 
     {
         // this block limits scope of borrows by ap.refer() method
         let mut argument_parser = ArgumentParser::new();
+        argument_parser.refer(&mut cpus).add_option(
+            &["--cores"],
+            Store,
+            "Number of cores to use (default: nb cores of the host",
+        );
+        argument_parser
+            .refer(&mut port)
+            .add_option(&["--port"], Store, "DB port (default: 6379)");
         argument_parser.refer(&mut http_port).add_option(
             &["--http-port"],
             Store,
@@ -33,13 +52,12 @@ fn main() -> Result<(), i32> {
     }
 
     // TODO
-    // init docker reader with channel to thread
     // each thread manage it's own hashmap
 
     // Init mono thread tokio scheduler
     let current_thread_runtime_res = tokio::runtime::Builder::new_current_thread()
         .enable_all()
-        .thread_name("Core")
+        .thread_name("core")
         .build();
 
     match current_thread_runtime_res {
@@ -57,9 +75,32 @@ fn main() -> Result<(), i32> {
                 "Issue starting multi-threaded tokio scheduler due to: {}",
                 issue
             );
-            return Err(1);
+            //return Err(1);
         }
     };
 
+    let mut workers_channel = Vec::new();
+    for worker_index in 1..=cpus {
+        let (tx, rx) = mpsc::channel::<CommandProcess>(32);
+
+        //let tx_local = tx.clone();
+        workers_channel.push(tx);
+
+        // Spawn Worker threads
+        let _ = thread::Builder::new()
+            .name(format!("Worker {worker_index}"))
+            .spawn(|| {
+                let _ = worker(rx);
+            });
+    }
+
+    let mut socket_reader = SocketReader::new(format!("127.0.0.1:{port}"), workers_channel)?;
+    socket_reader.start()
+}
+
+fn worker(_rx: Receiver<CommandProcess>) -> Result<(), Error> {
+    let _worker_rt = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .build()?;
     Ok(())
 }
