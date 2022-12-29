@@ -3,7 +3,7 @@ use poem::http::StatusCode;
 use poem::listener::TcpListener;
 use poem::{get, handler, Route, Server};
 use prometheus::{register_int_counter_vec, IntCounterVec, Opts};
-use tracing::error;
+use tracing::{error, info};
 
 lazy_static! {
     pub static ref DURATION: IntCounterVec = register_int_counter_vec!(
@@ -70,6 +70,7 @@ pub async fn init_prometheus_http_endpoint(
         .at("/healthz", get(healthz_handler))
         .at("/metrics", get(metrics_handler));
 
+    info!(port = http_port, "Start http endpoint");
     Server::new(TcpListener::bind(format!("0.0.0.0:{http_port}")))
         .run(app)
         .await?;

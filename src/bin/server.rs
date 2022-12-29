@@ -5,12 +5,10 @@ use std::thread;
 
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
-use tracing::error;
 
 use asyncached::command::CommandProcess;
 
-use asyncached::metrics::init_prometheus_http_endpoint;
-use asyncached::reader::SocketReader;
+use asyncached::runtime::{CoreRuntime, SocketRuntimeReader};
 
 fn main() -> Result<(), Error> {
     // install global collector configured based on RUST_LOG env var.
@@ -54,31 +52,6 @@ fn main() -> Result<(), Error> {
     // TODO
     // each thread manage it's own hashmap
 
-    // Init mono thread tokio scheduler
-    let current_thread_runtime_res = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .thread_name("core")
-        .build();
-
-    match current_thread_runtime_res {
-        Ok(current_thread_runtime) => {
-            // Init prometheus http endpoint
-            current_thread_runtime.spawn(async move {
-                if let Err(issue) = init_prometheus_http_endpoint(http_port).await {
-                    error!("Issue to start prometheus http endpoint due to {}", issue);
-                    std::process::abort();
-                }
-            });
-        }
-        Err(issue) => {
-            error!(
-                "Issue starting multi-threaded tokio scheduler due to: {}",
-                issue
-            );
-            //return Err(1);
-        }
-    };
-
     let mut workers_channel = Vec::new();
     for worker_index in 1..=cpus {
         let (tx, rx) = mpsc::channel::<CommandProcess>(32);
@@ -94,8 +67,16 @@ fn main() -> Result<(), Error> {
             });
     }
 
-    let mut socket_reader = SocketReader::new(format!("127.0.0.1:{port}"), workers_channel)?;
-    socket_reader.start()
+    // Init socket reader runtime
+    let mut socket_rt_reader =
+        SocketRuntimeReader::new(format!("127.0.0.1:{port}"), workers_channel)?;
+    socket_rt_reader.start()?;
+
+    // Init core runtime
+    let mut core_rt = CoreRuntime::new(http_port)?;
+    core_rt.start()?;
+
+    Ok(())
 }
 
 fn worker(_rx: Receiver<CommandProcess>) -> Result<(), Error> {
