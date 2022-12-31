@@ -2,18 +2,20 @@ use crate::command::CommandProcess;
 use crate::metrics::init_prometheus_http_endpoint;
 use crate::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, info};
 
-pub struct SocketRuntimeReader {
+pub struct SocketReaderRuntime {
     addr: String,
     workers_channel: Vec<Sender<CommandProcess>>,
     rt: Runtime,
 }
 
-impl SocketRuntimeReader {
+impl SocketReaderRuntime {
     /// Create a new socket runtime reader
     ///
     /// # Arguments
@@ -28,7 +30,7 @@ impl SocketRuntimeReader {
     pub fn new(
         addr: String,
         workers_channel: Vec<Sender<CommandProcess>>,
-    ) -> Result<SocketRuntimeReader, Error> {
+    ) -> Result<SocketReaderRuntime, Error> {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_io()
             .thread_name_fn(|| {
@@ -38,7 +40,7 @@ impl SocketRuntimeReader {
             })
             .build()?;
 
-        Ok(SocketRuntimeReader {
+        Ok(SocketReaderRuntime {
             addr,
             workers_channel,
             rt,
@@ -79,6 +81,7 @@ impl CoreRuntime {
     ///
     /// # Arguments
     ///
+    /// * `port` - the listen port
     ///
     /// # Return
     ///
@@ -101,6 +104,58 @@ impl CoreRuntime {
                 std::process::abort();
             }
         });
+        Ok(())
+    }
+}
+
+pub struct DBManagerRuntime {
+    nb_workers: usize,
+    worker_channel_buffer_size: usize,
+    pub workers_channel: Vec<Sender<CommandProcess>>,
+}
+
+impl DBManagerRuntime {
+    /// Create a new db manager runtime
+    ///
+    /// # Arguments
+    ///
+    ///
+    /// # Return
+    ///
+    /// * Result<DBManagerRuntime, Error>
+    ///
+    pub fn new(nb_workers: usize) -> Result<DBManagerRuntime, Error> {
+        let workers_channel: Vec<Sender<CommandProcess>> = Vec::new();
+        let worker_channel_buffer_size: usize = 32;
+
+        Ok(DBManagerRuntime {
+            nb_workers,
+            worker_channel_buffer_size,
+            workers_channel,
+        })
+    }
+
+    pub fn start(&mut self) -> Result<(), Error> {
+        for worker_index in 1..=self.nb_workers {
+            let (tx, rx) = mpsc::channel::<CommandProcess>(self.worker_channel_buffer_size);
+
+            //let tx_local = tx.clone();
+            self.workers_channel.push(tx);
+
+            // Spawn Worker threads
+            let _ = thread::Builder::new()
+                .name(format!("Worker {worker_index}"))
+                .spawn(|| {
+                    let _ = Self::worker(rx);
+                });
+        }
+        Ok(())
+    }
+
+    fn worker(_rx: Receiver<CommandProcess>) -> Result<(), Error> {
+        let _worker_rt = tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .build()?;
         Ok(())
     }
 }

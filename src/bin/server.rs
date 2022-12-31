@@ -1,15 +1,9 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
 use mementocached::Error;
 
-use std::thread;
+use mementocached::runtime::{CoreRuntime, DBManagerRuntime, SocketReaderRuntime};
 
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Receiver;
-
-use mementocached::command::CommandProcess;
-
-use mementocached::runtime::{CoreRuntime, SocketRuntimeReader};
-
+// TODO each thread manage it's own hashmap
 fn main() -> Result<(), Error> {
     // install global collector configured based on RUST_LOG env var.
     tracing_subscriber::fmt::init();
@@ -49,39 +43,18 @@ fn main() -> Result<(), Error> {
         console_subscriber::init();
     }
 
-    // TODO
-    // each thread manage it's own hashmap
-
-    let mut workers_channel = Vec::new();
-    for worker_index in 1..=cpus {
-        let (tx, rx) = mpsc::channel::<CommandProcess>(32);
-
-        //let tx_local = tx.clone();
-        workers_channel.push(tx);
-
-        // Spawn Worker threads
-        let _ = thread::Builder::new()
-            .name(format!("Worker {worker_index}"))
-            .spawn(|| {
-                let _ = worker(rx);
-            });
-    }
+    // Init worker managing the DB
+    let mut db_mgr_rt: DBManagerRuntime = DBManagerRuntime::new(cpus)?;
+    db_mgr_rt.start()?;
 
     // Init socket reader runtime
-    let mut socket_rt_reader =
-        SocketRuntimeReader::new(format!("127.0.0.1:{port}"), workers_channel)?;
-    socket_rt_reader.start()?;
+    let mut socket_reader_rt =
+        SocketReaderRuntime::new(format!("127.0.0.1:{port}"), db_mgr_rt.workers_channel)?;
+    socket_reader_rt.start()?;
 
     // Init core runtime
     let mut core_rt = CoreRuntime::new(http_port)?;
     core_rt.start()?;
 
-    Ok(())
-}
-
-fn worker(_rx: Receiver<CommandProcess>) -> Result<(), Error> {
-    let _worker_rt = tokio::runtime::Builder::new_current_thread()
-        .enable_io()
-        .build()?;
     Ok(())
 }
