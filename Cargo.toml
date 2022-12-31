@@ -1,5 +1,5 @@
 [package]
-name = "asyncached"
+name = "mementocached"
 version = "0.1.0"
 authors = ["Nicolas Fraison <nfraison@yahoo.fr>"]
 edition = "2021"

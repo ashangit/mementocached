@@ -1,14 +1,14 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
-use asyncached::Error;
+use mementocached::Error;
 
 use std::thread;
 
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
 
-use asyncached::command::CommandProcess;
+use mementocached::command::CommandProcess;
 
-use asyncached::runtime::{CoreRuntime, SocketRuntimeReader};
+use mementocached::runtime::{CoreRuntime, SocketRuntimeReader};
 
 fn main() -> Result<(), Error> {
     // install global collector configured based on RUST_LOG env var.
@@ -17,7 +17,7 @@ fn main() -> Result<(), Error> {
     let mut cpus = num_cpus::get();
     let mut port = 6379;
     let mut http_port = 8080;
-    let mut tokio_console = false;
+    let mut debug_mode = false;
 
     {
         // this block limits scope of borrows by ap.refer() method
@@ -33,19 +33,19 @@ fn main() -> Result<(), Error> {
         argument_parser.refer(&mut http_port).add_option(
             &["--http-port"],
             Store,
-            "Http port for metrics endpoint (default: 8080)",
+            "Http port (default: 8080)",
         );
-        argument_parser.refer(&mut tokio_console).add_option(
-            &["--tokio-console"],
+        argument_parser.refer(&mut debug_mode).add_option(
+            &["--debug-mode"],
             StoreTrue,
-            "Enable console subscriber for the tokio console (default: false)",
+            "Enable debug mode [enable console subscriber for the tokio console] (default: false)",
         );
         argument_parser.parse_args_or_exit();
     }
 
     // Init tokio console subscriber if enabled
     // Used to debug trace async task with https://github.com/tokio-rs/console
-    if tokio_console {
+    if debug_mode {
         console_subscriber::init();
     }
 
