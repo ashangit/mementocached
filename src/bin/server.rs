@@ -56,5 +56,8 @@ fn main() -> Result<(), Error> {
     let mut core_rt = CoreRuntime::new(http_port)?;
     core_rt.start()?;
 
+    // TODO se how to add those backtrace dump in case of debug mode (https://tokio.rs/blog/2022-10-announcing-async-backtrace)
+    //println!("{}", async_backtrace::taskdump_tree(true));
+
     Ok(())
 }

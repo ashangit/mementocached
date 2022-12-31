@@ -12,6 +12,9 @@ path = "src/bin/server.rs"
 # Async
 num_cpus = "1"
 tokio = { version = "1", features = ["full"] }
+# Protos
+bytes = "1"
+protobuf = { version = "3", features = ["with-bytes"] }
 # Log
 tracing = "0"
 tracing-subscriber = "0"
@@ -21,8 +24,12 @@ lazy_static = "1"
 poem = "1"
 # Debug
 console-subscriber = "0"
+async-backtrace = "0"
 # Other
 argparse = "0"
+
+[build-dependencies]
+protobuf-codegen = "3"
 
 [profile.release]
 lto = true

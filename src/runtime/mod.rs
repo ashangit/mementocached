@@ -1,13 +1,51 @@
+use crate::command::connection::Connection;
 use crate::command::CommandProcess;
 use crate::metrics::init_prometheus_http_endpoint;
 use crate::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, info};
+
+pub struct CoreRuntime {
+    port: u16,
+    rt: Runtime,
+}
+
+impl CoreRuntime {
+    /// Create a new core runtime
+    ///
+    /// # Arguments
+    ///
+    /// * `port` - the listen port
+    ///
+    /// # Return
+    ///
+    /// * Result<CoreRuntime, Error>
+    ///
+    pub fn new(port: u16) -> Result<CoreRuntime, Error> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .thread_name("core")
+            .build()?;
+
+        Ok(CoreRuntime { port, rt })
+    }
+
+    pub fn start(&mut self) -> Result<(), Error> {
+        let port = self.port;
+        self.rt.block_on(async move {
+            if let Err(issue) = init_prometheus_http_endpoint(port).await {
+                error!("Issue to start prometheus http endpoint due to {}", issue);
+                std::process::abort();
+            }
+        });
+        Ok(())
+    }
+}
 
 pub struct SocketReaderRuntime {
     addr: String,
@@ -55,55 +93,30 @@ impl SocketReaderRuntime {
             let listener = TcpListener::bind(addr.clone()).await.unwrap();
 
             loop {
-                let (_socket, client_addr) = listener.accept().await.unwrap();
+                let (stream, client_addr) = listener.accept().await.unwrap();
 
-                let _workers_channel = workers_channel.clone();
+                let workers_channel = workers_channel.clone();
                 tokio::spawn(async move {
                     info!(
                         client_addr = client_addr.to_string(),
                         "Accept connection from client"
                     );
-                    //process(socket, workers_channel).await;
+                    Self::process(stream, workers_channel).await;
                 });
             }
         });
         Ok(())
     }
-}
 
-pub struct CoreRuntime {
-    port: u16,
-    rt: Runtime,
-}
+    async fn process(
+        stream: TcpStream,
+        _workers_channel: Vec<Sender<CommandProcess>>,
+    ) -> Result<(), Error> {
+        let mut connection = Connection::new(stream);
 
-impl CoreRuntime {
-    /// Create a new core runtime
-    ///
-    /// # Arguments
-    ///
-    /// * `port` - the listen port
-    ///
-    /// # Return
-    ///
-    /// * Result<CoreRuntime, Error>
-    ///
-    pub fn new(port: u16) -> Result<CoreRuntime, Error> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .thread_name("core")
-            .build()?;
-
-        Ok(CoreRuntime { port, rt })
-    }
-
-    pub fn start(&mut self) -> Result<(), Error> {
-        let port = self.port;
-        self.rt.block_on(async move {
-            if let Err(issue) = init_prometheus_http_endpoint(port).await {
-                error!("Issue to start prometheus http endpoint due to {}", issue);
-                std::process::abort();
-            }
-        });
+        while let Some(_request) = connection.read_request().await.unwrap() {
+            info!("process")
+        }
         Ok(())
     }
 }

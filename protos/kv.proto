@@ -1,0 +1,38 @@
+syntax = "proto3";
+package kv;
+
+message Request {
+  oneof command {
+    GetRequest get = 1;
+    SetRequest set = 2;
+    DeleteRequest delete = 3;
+  }
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetReply {
+  bytes value = 1;
+  string err = 2;
+}
+
+message SetRequest {
+  string key = 1;
+  bytes value = 2;
+}
+
+message SetReply {
+  bool status = 1;
+  string err = 2;
+}
+
+message DeleteRequest {
+  string key = 1;
+}
+
+message DeleteReply {
+  bool status = 1;
+  string err = 2;
+}

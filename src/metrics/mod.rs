@@ -63,6 +63,7 @@ async fn metrics_handler() -> Result<String, StatusCode> {
 ///
 /// * `http_port` - listening port of the webserver
 ///
+#[async_backtrace::framed]
 pub async fn init_prometheus_http_endpoint(
     http_port: u16,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
