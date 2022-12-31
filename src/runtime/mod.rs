@@ -138,24 +138,50 @@ impl DBManagerRuntime {
     pub fn start(&mut self) -> Result<(), Error> {
         for worker_index in 1..=self.nb_workers {
             let (tx, rx) = mpsc::channel::<CommandProcess>(self.worker_channel_buffer_size);
-
-            //let tx_local = tx.clone();
             self.workers_channel.push(tx);
 
-            // Spawn Worker threads
             let _ = thread::Builder::new()
-                .name(format!("Worker {worker_index}"))
+                .name(format!("worker-{worker_index}"))
                 .spawn(|| {
-                    let _ = Self::worker(rx);
+                    let worker_rt_res = DBWorkerRuntime::new(rx);
+                    match worker_rt_res {
+                        Ok(mut worker_rt) => {
+                            worker_rt.start();
+                        }
+                        Err(issue) => {
+                            error!("Failed to create worker db {}", issue)
+                        }
+                    }
                 });
         }
         Ok(())
     }
+}
 
-    fn worker(_rx: Receiver<CommandProcess>) -> Result<(), Error> {
-        let _worker_rt = tokio::runtime::Builder::new_current_thread()
+struct DBWorkerRuntime {
+    rt: Runtime,
+    rx: Receiver<CommandProcess>,
+}
+
+impl DBWorkerRuntime {
+    /// Create a new db worker runtime
+    ///
+    /// # Arguments
+    ///
+    ///
+    /// # Return
+    ///
+    /// * Result<DBWorkerRuntime, Error>
+    ///
+    pub fn new(rx: Receiver<CommandProcess>) -> Result<DBWorkerRuntime, Error> {
+        let rt = tokio::runtime::Builder::new_current_thread()
             .enable_io()
             .build()?;
+
+        Ok(DBWorkerRuntime { rt, rx })
+    }
+
+    pub fn start(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }
