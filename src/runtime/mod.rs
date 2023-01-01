@@ -101,7 +101,20 @@ impl SocketReaderRuntime {
                         client_addr = client_addr.to_string(),
                         "Accept connection from client"
                     );
-                    Self::process(stream, workers_channel).await;
+                    match Self::process(stream, workers_channel).await {
+                        Ok(_) => {
+                            info!(
+                                client_addr = client_addr.to_string(),
+                                "Disconnect from client"
+                            );
+                        }
+                        Err(_issue) => {
+                            error!(
+                                client_addr = client_addr.to_string(),
+                                "Failure processing event from client"
+                            )
+                        }
+                    }
                 });
             }
         });
@@ -114,10 +127,19 @@ impl SocketReaderRuntime {
     ) -> Result<(), Error> {
         let mut connection = Connection::new(stream);
 
-        while let Some(_request) = connection.read_request().await.unwrap() {
-            info!("process")
+        loop {
+            match connection.read_request().await {
+                Ok(Some(_request)) => {
+                    info!("processing request");
+                }
+                Ok(None) => {
+                    return Ok(());
+                }
+                Err(issue) => {
+                    return Err(issue);
+                }
+            }
         }
-        Ok(())
     }
 }
 

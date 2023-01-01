@@ -48,7 +48,7 @@ impl Connection {
         }
     }
 
-    pub async fn write_reply(&mut self, reply: Vec<u8>) -> std::result::Result<(), Error> {
+    pub async fn write_reply(&mut self, reply: Vec<u8>) -> Result<(), Error> {
         self.stream.write_all(reply.as_slice()).await?;
         self.stream.flush().await?;
 
