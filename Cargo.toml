@@ -10,6 +10,7 @@ path = "src/bin/server.rs"
 
 [dependencies]
 # Async
+ahash = "0"
 num_cpus = "1"
 tokio = { version = "1", features = ["full"] }
 # Protos

@@ -1,13 +1,18 @@
 use crate::command::connection::Connection;
-use crate::command::CommandProcess;
+use crate::command::{Command, CommandProcess, Delete, Get, Set};
 use crate::metrics::init_prometheus_http_endpoint;
+use crate::protos::kv;
+use crate::protos::kv::Request;
 use crate::Error;
+use ahash::AHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info};
 
 pub struct CoreRuntime {
@@ -98,7 +103,7 @@ impl SocketReaderRuntime {
                 let workers_channel = workers_channel.clone();
                 tokio::spawn(async move {
                     SocketProcessor::new(stream, workers_channel, client_addr.to_string())
-                        .process()
+                        .read()
                         .await;
                 });
             }
@@ -141,11 +146,12 @@ impl SocketProcessor {
         }
     }
 
-    pub async fn process(&mut self) {
+    pub async fn read(&mut self) {
         loop {
             match self.connection.read_request().await {
-                Ok(Some(_request)) => {
+                Ok(Some(request)) => {
                     info!("processing request");
+                    self.process(request);
                 }
                 Ok(None) => {
                     info!(client_addr = self.client_addr, "Disconnect from client");
@@ -161,6 +167,65 @@ impl SocketProcessor {
                 }
             }
         }
+    }
+
+    async fn process(&mut self, request: Request) {
+        let (resp_tx, resp_rx) = oneshot::channel();
+
+        match request.command.unwrap() {
+            kv::request::Command::Get(x) => {
+                // Send the SET request
+                let modulo: usize = self.calculate_modulo(&x.key);
+
+                let cmd = Command::Get(Get { request: x });
+                self.workers_channel[modulo]
+                    .send((cmd, resp_tx))
+                    .await
+                    .unwrap();
+            }
+            kv::request::Command::Set(x) => {
+                // Send the GET request
+                let modulo: usize = self.calculate_modulo(&x.key);
+
+                let cmd = Command::Set(Set { request: x });
+                self.workers_channel[modulo]
+                    .send((cmd, resp_tx))
+                    .await
+                    .unwrap();
+            }
+            kv::request::Command::Delete(x) => {
+                // Send the DELETE request
+                let modulo: usize = self.calculate_modulo(&x.key);
+
+                let cmd = Command::Delete(Delete { request: x });
+                self.workers_channel[modulo]
+                    .send((cmd, resp_tx))
+                    .await
+                    .unwrap();
+            }
+        }
+
+        // Await the response
+        match resp_rx.await {
+            Ok(x) => {
+                let reply = x.unwrap();
+
+                // Write the response to the client
+                //
+                self.connection.write_reply(reply).await.unwrap();
+            }
+            Err(_) => (),
+        }
+    }
+
+    fn calculate_modulo<T: Hash>(&mut self, t: T) -> usize {
+        Self::calculate_hash(t) % self.workers_channel.len()
+    }
+
+    fn calculate_hash<T: Hash>(t: T) -> usize {
+        let mut hasher = AHasher::default();
+        t.hash(&mut hasher);
+        hasher.finish() as usize
     }
 }
 

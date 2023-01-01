@@ -1,4 +1,3 @@
-* create protocol + update socket reader to manage command
 * update db worker to manage command
 * update worker to manage 4k of hashmap spread on all workers
 * add metrics
