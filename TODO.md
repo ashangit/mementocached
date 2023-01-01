@@ -1,5 +1,4 @@
 * create protocol + update socket reader to manage command
-* create process structure instead oa a function
 * update db worker to manage command
 * update worker to manage 4k of hashmap spread on all workers
 * add metrics

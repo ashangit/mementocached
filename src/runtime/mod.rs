@@ -97,46 +97,67 @@ impl SocketReaderRuntime {
 
                 let workers_channel = workers_channel.clone();
                 tokio::spawn(async move {
-                    info!(
-                        client_addr = client_addr.to_string(),
-                        "Accept connection from client"
-                    );
-                    match Self::process(stream, workers_channel).await {
-                        Ok(_) => {
-                            info!(
-                                client_addr = client_addr.to_string(),
-                                "Disconnect from client"
-                            );
-                        }
-                        Err(_issue) => {
-                            error!(
-                                client_addr = client_addr.to_string(),
-                                "Failure processing event from client"
-                            )
-                        }
-                    }
+                    SocketProcessor::new(stream, workers_channel, client_addr.to_string())
+                        .process()
+                        .await;
                 });
             }
         });
         Ok(())
     }
+}
 
-    async fn process(
+pub struct SocketProcessor {
+    connection: Connection,
+    workers_channel: Vec<Sender<CommandProcess>>,
+    client_addr: String,
+}
+
+impl SocketProcessor {
+    /// Create a new socket processor
+    ///
+    /// # Arguments
+    ///
+    /// * `stream` - tcp stream to client
+    /// * `workers_channel` - list of workers channel
+    /// * `client_addr` - the addr of the client
+    ///
+    /// # Return
+    ///
+    /// * SocketProcessor
+    ///
+    pub fn new(
         stream: TcpStream,
-        _workers_channel: Vec<Sender<CommandProcess>>,
-    ) -> Result<(), Error> {
-        let mut connection = Connection::new(stream);
+        workers_channel: Vec<Sender<CommandProcess>>,
+        client_addr: String,
+    ) -> SocketProcessor {
+        info!(client_addr = client_addr, "Accept connection from client");
+        let connection = Connection::new(stream);
 
+        SocketProcessor {
+            connection,
+            workers_channel,
+            client_addr,
+        }
+    }
+
+    pub async fn process(&mut self) {
         loop {
-            match connection.read_request().await {
+            match self.connection.read_request().await {
                 Ok(Some(_request)) => {
                     info!("processing request");
                 }
                 Ok(None) => {
-                    return Ok(());
+                    info!(client_addr = self.client_addr, "Disconnect from client");
+                    return;
                 }
                 Err(issue) => {
-                    return Err(issue);
+                    error!(
+                        client_addr = self.client_addr,
+                        issue = issue,
+                        "Failure processing event from client"
+                    );
+                    return;
                 }
             }
         }
