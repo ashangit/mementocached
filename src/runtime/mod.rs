@@ -1,19 +1,22 @@
 use crate::command::connection::Connection;
-use crate::command::{Command, CommandProcess, Delete, Get, Set};
+use crate::command::{CommandProcess, DBAction, Delete, Get, Set};
 use crate::metrics::init_prometheus_http_endpoint;
 use crate::protos::kv;
 use crate::protos::kv::Request;
 use crate::Error;
-use ahash::AHasher;
+use ahash::{AHasher, HashMap, HashMapExt};
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::thread;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{error, info};
+
+pub type Db = Arc<Mutex<HashMap<String, Vec<u8>>>>;
 
 pub struct CoreRuntime {
     port: u16,
@@ -177,7 +180,7 @@ impl SocketProcessor {
                 // Send the SET request
                 let modulo: usize = self.calculate_modulo(&x.key);
 
-                let cmd = Command::Get(Get { request: x });
+                let cmd = DBAction::Get(Get { request: x });
                 self.workers_channel[modulo]
                     .send((cmd, resp_tx))
                     .await
@@ -187,7 +190,7 @@ impl SocketProcessor {
                 // Send the GET request
                 let modulo: usize = self.calculate_modulo(&x.key);
 
-                let cmd = Command::Set(Set { request: x });
+                let cmd = DBAction::Set(Set { request: x });
                 self.workers_channel[modulo]
                     .send((cmd, resp_tx))
                     .await
@@ -197,7 +200,7 @@ impl SocketProcessor {
                 // Send the DELETE request
                 let modulo: usize = self.calculate_modulo(&x.key);
 
-                let cmd = Command::Delete(Delete { request: x });
+                let cmd = DBAction::Delete(Delete { request: x });
                 self.workers_channel[modulo]
                     .send((cmd, resp_tx))
                     .await
@@ -264,10 +267,10 @@ impl DBManagerRuntime {
             let _ = thread::Builder::new()
                 .name(format!("worker-{worker_index}"))
                 .spawn(|| {
-                    let worker_rt_res = DBWorkerRuntime::new(rx);
+                    let worker_rt_res = DBWorkerRuntime::new();
                     match worker_rt_res {
                         Ok(mut worker_rt) => {
-                            worker_rt.start();
+                            worker_rt.start(rx);
                         }
                         Err(issue) => {
                             error!("Failed to create worker db {}", issue)
@@ -281,7 +284,6 @@ impl DBManagerRuntime {
 
 struct DBWorkerRuntime {
     rt: Runtime,
-    rx: Receiver<CommandProcess>,
 }
 
 impl DBWorkerRuntime {
@@ -294,15 +296,32 @@ impl DBWorkerRuntime {
     ///
     /// * Result<DBWorkerRuntime, Error>
     ///
-    pub fn new(rx: Receiver<CommandProcess>) -> Result<DBWorkerRuntime, Error> {
+    pub fn new() -> Result<DBWorkerRuntime, Error> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_io()
             .build()?;
 
-        Ok(DBWorkerRuntime { rt, rx })
+        Ok(DBWorkerRuntime { rt })
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(&mut self, mut rx: Receiver<CommandProcess>) -> Result<(), Error> {
+        self.rt.spawn(async move {
+            let db: Db = Arc::new(Mutex::new(HashMap::new()));
+
+            while let Some((cmd, resp_tx)) = rx.recv().await {
+                let db = db.clone();
+                tokio::spawn(async move {
+                    let db = db.lock().await;
+
+                    let reply: protobuf::Result<Vec<u8>> = match cmd {
+                        DBAction::Get(get) => get.execute(db),
+                        DBAction::Set(set) => set.execute(db),
+                        DBAction::Delete(delete) => delete.execute(db),
+                    };
+                    resp_tx.send(Ok(reply.unwrap()));
+                });
+            }
+        });
         Ok(())
     }
 }
