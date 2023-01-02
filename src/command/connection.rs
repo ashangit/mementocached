@@ -2,6 +2,7 @@ use bytes::BytesMut;
 use protobuf::Message;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
+use tracing::debug;
 
 use crate::protos::kv::Request;
 use crate::Error;
@@ -19,13 +20,15 @@ impl Connection {
     }
 
     pub async fn read_request(&mut self) -> Result<Option<Request>, Error> {
-        let frame_size: usize = self.stream.read_u64().await? as usize;
+        let request_size: usize = self.stream.read_u64().await? as usize;
 
-        if 0 == frame_size {
+        debug!(size = request_size, "Request size");
+
+        if 0 == request_size {
             return Ok(None);
         }
 
-        let mut buffer = BytesMut::with_capacity(frame_size);
+        let mut buffer = BytesMut::with_capacity(request_size);
 
         loop {
             if 0 == self.stream.read_buf(&mut buffer).await? {
@@ -36,7 +39,7 @@ impl Connection {
                 if buffer.is_empty() {
                     return Ok(None);
                 } else {
-                    return Err("connection reset by peer".into());
+                    return Err("Connection reset by peer".into());
                 }
             }
 

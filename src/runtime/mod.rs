@@ -14,7 +14,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{mpsc, oneshot, Mutex};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 pub type Db = Arc<Mutex<HashMap<String, Vec<u8>>>>;
 
@@ -153,8 +153,8 @@ impl SocketProcessor {
         loop {
             match self.connection.read_request().await {
                 Ok(Some(request)) => {
-                    info!("processing request");
-                    self.process(request);
+                    debug!("processing request");
+                    self.process(request).await;
                 }
                 Ok(None) => {
                     info!(client_addr = self.client_addr, "Disconnect from client");
@@ -177,18 +177,20 @@ impl SocketProcessor {
 
         match request.command.unwrap() {
             kv::request::Command::Get(x) => {
-                // Send the SET request
-                let modulo: usize = self.calculate_modulo(&x.key);
-
-                let cmd = DBAction::Get(Get { request: x });
-                self.workers_channel[modulo]
-                    .send((cmd, resp_tx))
-                    .await
-                    .unwrap();
-            }
-            kv::request::Command::Set(x) => {
                 // Send the GET request
                 let modulo: usize = self.calculate_modulo(&x.key);
+                debug!(modulo = modulo, "get");
+
+                let cmd = DBAction::Get(Get { request: x });
+                match self.workers_channel[modulo].send((cmd, resp_tx)).await {
+                    Ok(_x) => debug!("ok"),
+                    Err(issue) => error!("issue {}", issue),
+                };
+            }
+            kv::request::Command::Set(x) => {
+                // Send the SET request
+                let modulo: usize = self.calculate_modulo(&x.key);
+                debug!(modulo = modulo, "set");
 
                 let cmd = DBAction::Set(Set { request: x });
                 self.workers_channel[modulo]
@@ -199,6 +201,7 @@ impl SocketProcessor {
             kv::request::Command::Delete(x) => {
                 // Send the DELETE request
                 let modulo: usize = self.calculate_modulo(&x.key);
+                debug!(modulo = modulo, "delete");
 
                 let cmd = DBAction::Delete(Delete { request: x });
                 self.workers_channel[modulo]
@@ -305,7 +308,7 @@ impl DBWorkerRuntime {
     }
 
     pub fn start(&mut self, mut rx: Receiver<CommandProcess>) -> Result<(), Error> {
-        self.rt.spawn(async move {
+        self.rt.block_on(async move {
             let db: Db = Arc::new(Mutex::new(HashMap::new()));
 
             while let Some((cmd, resp_tx)) = rx.recv().await {

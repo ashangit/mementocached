@@ -2,7 +2,6 @@
 * add metrics
 * ensure all tests work
 * update logging and error mgt
-* create client => release as 0.1.0
 * manage on disk data => release as 0.2.0
 * multi node
   * define archi and mechanism

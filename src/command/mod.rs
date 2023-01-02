@@ -46,8 +46,8 @@ impl Set {
     ) -> protobuf::Result<Vec<u8>> {
         db.insert(self.request.key.clone(), self.request.value.to_vec());
         // Ignore errors
-        let reply = kv::SetReply::new();
-        //        reply. (true);
+        let mut reply = kv::SetReply::new();
+        reply.status = true;
 
         reply.write_to_bytes()
     }
@@ -65,9 +65,8 @@ impl Delete {
     ) -> protobuf::Result<Vec<u8>> {
         db.remove(self.request.key.as_str());
         // Ignore errors
-        let reply = kv::DeleteReply::new();
-        //reply.set_status(true);
-
+        let mut reply = kv::DeleteReply::new();
+        reply.status = true;
         reply.write_to_bytes()
     }
 }
