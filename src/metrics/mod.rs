@@ -6,14 +6,9 @@ use prometheus::{register_int_counter_vec, IntCounterVec, Opts};
 use tracing::{error, info};
 
 lazy_static! {
-    pub static ref DURATION: IntCounterVec = register_int_counter_vec!(
-        Opts::new("duration", "Duration converting file"),
-        &[
-            "source_file",
-            "source_format",
-            "destination_file",
-            "destination_format"
-        ]
+    pub static ref NUMBER_OF_REQUESTS: IntCounterVec = register_int_counter_vec!(
+        Opts::new("number_of_requests", "Number of total requests"),
+        &["type"]
     )
     .expect("metric can be created");
 }

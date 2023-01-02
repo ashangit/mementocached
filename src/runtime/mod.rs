@@ -1,6 +1,6 @@
 use crate::command::connection::Connection;
 use crate::command::{CommandProcess, DBAction, Delete, Get, Set};
-use crate::metrics::init_prometheus_http_endpoint;
+use crate::metrics::{init_prometheus_http_endpoint, NUMBER_OF_REQUESTS};
 use crate::protos::kv;
 use crate::protos::kv::Request;
 use crate::Error;
@@ -177,6 +177,8 @@ impl SocketProcessor {
 
         match request.command.unwrap() {
             kv::request::Command::Get(x) => {
+                NUMBER_OF_REQUESTS.with_label_values(&["get"]).inc();
+
                 // Send the GET request
                 let modulo: usize = self.calculate_modulo(&x.key);
                 debug!(modulo = modulo, "get");
@@ -188,6 +190,8 @@ impl SocketProcessor {
                 };
             }
             kv::request::Command::Set(x) => {
+                NUMBER_OF_REQUESTS.with_label_values(&["set"]).inc();
+
                 // Send the SET request
                 let modulo: usize = self.calculate_modulo(&x.key);
                 debug!(modulo = modulo, "set");
@@ -199,6 +203,8 @@ impl SocketProcessor {
                     .unwrap();
             }
             kv::request::Command::Delete(x) => {
+                NUMBER_OF_REQUESTS.with_label_values(&["delete"]).inc();
+
                 // Send the DELETE request
                 let modulo: usize = self.calculate_modulo(&x.key);
                 debug!(modulo = modulo, "delete");
