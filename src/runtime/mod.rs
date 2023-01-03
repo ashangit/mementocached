@@ -269,7 +269,7 @@ impl DBManagerRuntime {
     }
 
     pub fn start(&mut self) -> Result<(), Error> {
-        for worker_index in 1..=self.nb_workers {
+        for worker_index in 0..self.nb_workers {
             let (tx, rx) = mpsc::channel::<CommandProcess>(self.worker_channel_buffer_size);
             self.workers_channel.push(tx);
 

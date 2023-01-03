@@ -1,3 +1,4 @@
+* Add size response (as performed in request to know how many bytes to read)
 * update worker to manage 4k of hashmap spread on all workers
 * add metrics
 * ensure all tests work

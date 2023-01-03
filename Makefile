@@ -50,7 +50,3 @@ pre-commit:
 	pre-commit install
 	pre-commit autoupdate
 	pre-commit gc
-
-.PHONY: python-generate-protos
-python-generate-protos:
-	$(MAKE) -C client generate-protos

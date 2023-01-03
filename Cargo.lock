@@ -778,6 +778,7 @@ dependencies = [
  "prometheus",
  "protobuf 3.2.0",
  "protobuf-codegen",
+ "rand",
  "tokio",
  "tracing",
  "tracing-subscriber",

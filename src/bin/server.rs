@@ -8,7 +8,7 @@ fn main() -> Result<(), Error> {
     // install global collector configured based on RUST_LOG env var.
     tracing_subscriber::fmt::init();
 
-    let mut cpus = num_cpus::get();
+    let mut worker_threads = num_cpus::get();
     let mut port = 6379;
     let mut http_port = 8080;
     let mut debug_mode = false;
@@ -16,10 +16,10 @@ fn main() -> Result<(), Error> {
     {
         // this block limits scope of borrows by ap.refer() method
         let mut argument_parser = ArgumentParser::new();
-        argument_parser.refer(&mut cpus).add_option(
-            &["--cores"],
+        argument_parser.refer(&mut worker_threads).add_option(
+            &["--worker-threads"],
             Store,
-            "Number of cores to use (default: nb cores of the host",
+            "Number of DB worker threads to use (default: nb cores of the host)",
         );
         argument_parser
             .refer(&mut port)
@@ -44,7 +44,7 @@ fn main() -> Result<(), Error> {
     }
 
     // Init worker managing the DB
-    let mut db_mgr_rt: DBManagerRuntime = DBManagerRuntime::new(cpus)?;
+    let mut db_mgr_rt: DBManagerRuntime = DBManagerRuntime::new(worker_threads)?;
     db_mgr_rt.start()?;
 
     // Init socket reader runtime
