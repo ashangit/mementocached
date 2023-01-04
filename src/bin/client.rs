@@ -68,6 +68,22 @@ async fn client_action(server_socket: String) {
         let mut buf = vec![0; 1024];
         socket.read(&mut buf).await.unwrap();
 
+        // delete
+        let mut command = kv::Request::new();
+        let mut delete = kv::DeleteRequest::new();
+        delete.key = format!("{key_suffix}{index}");
+        command.set_delete(delete);
+
+        let slice = [
+            command.compute_size().to_be_bytes().as_slice(),
+            command.write_to_bytes().unwrap().as_slice(),
+        ]
+        .concat();
+        socket.write_all(slice.as_slice()).await.unwrap();
+
+        let mut buf = vec![0; 1024];
+        socket.read(&mut buf).await.unwrap();
+
         index += 1;
     }
 }
