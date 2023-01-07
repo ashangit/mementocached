@@ -1,15 +1,18 @@
 use mementocached::protos::kv;
 
 use argparse::{ArgumentParser, Store};
+use mementocached::command::connection::Connection;
+use mementocached::protos::kv::{DeleteReply, GetReply, SetReply};
+
 use protobuf::Message;
 use rand::{distributions::Alphanumeric, Rng};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::io;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 async fn client_action(server_socket: String) {
-    let mut socket = TcpStream::connect(server_socket).await.unwrap();
+    let socket = TcpStream::connect(server_socket).await.unwrap();
+    let mut connection = Connection::new(socket);
 
     let key_suffix: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -25,15 +28,13 @@ async fn client_action(server_socket: String) {
         get.key = format!("{key_suffix}{index}");
         command.set_get(get);
 
-        let slice = [
-            command.compute_size().to_be_bytes().as_slice(),
-            command.write_to_bytes().unwrap().as_slice(),
-        ]
-        .concat();
-        socket.write_all(slice.as_slice()).await.unwrap();
-
-        let mut buf = vec![0; 1024];
-        socket.read(&mut buf).await.unwrap();
+        connection
+            .write_message(command.write_to_bytes().unwrap())
+            .await
+            .unwrap();
+        let buffer = connection.read_message().await.unwrap().unwrap();
+        let _reply: GetReply = Message::parse_from_bytes(&buffer).unwrap();
+        // println!("{}", std::str::from_utf8(&_reply.value).unwrap());
 
         // Set
         let mut command = kv::Request::new();
@@ -42,15 +43,13 @@ async fn client_action(server_socket: String) {
         set.value = Vec::from("nicovalue");
         command.set_set(set);
 
-        let slice = [
-            command.compute_size().to_be_bytes().as_slice(),
-            command.write_to_bytes().unwrap().as_slice(),
-        ]
-        .concat();
-        socket.write_all(slice.as_slice()).await.unwrap();
-
-        let mut buf = vec![0; 1024];
-        socket.read(&mut buf).await.unwrap();
+        connection
+            .write_message(command.write_to_bytes().unwrap())
+            .await
+            .unwrap();
+        let buffer = connection.read_message().await.unwrap().unwrap();
+        let _reply: SetReply = Message::parse_from_bytes(&buffer).unwrap();
+        // println!("{}", _reply.status);
 
         // Get
         let mut command = kv::Request::new();
@@ -58,15 +57,13 @@ async fn client_action(server_socket: String) {
         get.key = format!("{key_suffix}{index}");
         command.set_get(get);
 
-        let slice = [
-            command.compute_size().to_be_bytes().as_slice(),
-            command.write_to_bytes().unwrap().as_slice(),
-        ]
-        .concat();
-        socket.write_all(slice.as_slice()).await.unwrap();
-
-        let mut buf = vec![0; 1024];
-        socket.read(&mut buf).await.unwrap();
+        connection
+            .write_message(command.write_to_bytes().unwrap())
+            .await
+            .unwrap();
+        let buffer = connection.read_message().await.unwrap().unwrap();
+        let _reply: GetReply = Message::parse_from_bytes(&buffer).unwrap();
+        // println!("{}", std::str::from_utf8(&_reply.value).unwrap());
 
         // delete
         let mut command = kv::Request::new();
@@ -74,15 +71,13 @@ async fn client_action(server_socket: String) {
         delete.key = format!("{key_suffix}{index}");
         command.set_delete(delete);
 
-        let slice = [
-            command.compute_size().to_be_bytes().as_slice(),
-            command.write_to_bytes().unwrap().as_slice(),
-        ]
-        .concat();
-        socket.write_all(slice.as_slice()).await.unwrap();
-
-        let mut buf = vec![0; 1024];
-        socket.read(&mut buf).await.unwrap();
+        connection
+            .write_message(command.write_to_bytes().unwrap())
+            .await
+            .unwrap();
+        let buffer = connection.read_message().await.unwrap().unwrap();
+        let _reply: DeleteReply = Message::parse_from_bytes(&buffer).unwrap();
+        // println!("{}", _reply.status);
 
         index += 1;
     }

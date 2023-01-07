@@ -1,10 +1,8 @@
 use bytes::BytesMut;
-use protobuf::Message;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use tracing::debug;
 
-use crate::protos::kv::Request;
 use crate::Error;
 
 #[derive(Debug)]
@@ -19,7 +17,7 @@ impl Connection {
         }
     }
 
-    pub async fn read_request(&mut self) -> Result<Option<Request>, Error> {
+    pub async fn read_message(&mut self) -> Result<Option<BytesMut>, Error> {
         let request_size: usize = self.stream.read_u64().await? as usize;
 
         debug!(size = request_size, "Request size");
@@ -44,15 +42,14 @@ impl Connection {
             }
 
             if buffer.len() == buffer.capacity() {
-                let request: Request = Message::parse_from_bytes(&buffer).unwrap();
-
-                return Ok(Some(request));
+                return Ok(Some(buffer));
             }
         }
     }
 
-    pub async fn write_reply(&mut self, reply: Vec<u8>) -> Result<(), Error> {
-        self.stream.write_all(reply.as_slice()).await?;
+    pub async fn write_message(&mut self, reply: Vec<u8>) -> Result<(), Error> {
+        let slice = [reply.len().to_be_bytes().as_slice(), reply.as_slice()].concat();
+        self.stream.write_all(slice.as_slice()).await?;
         self.stream.flush().await?;
 
         Ok(())

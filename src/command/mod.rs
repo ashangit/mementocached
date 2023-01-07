@@ -26,7 +26,7 @@ impl Get {
         let mut reply = kv::GetReply::new();
         match db.get(&self.request.key) {
             Some(x) => {
-                reply.value = Vec::from(x.as_slice().clone());
+                reply.value = Vec::from(x.as_slice());
             }
             None => reply.err = "KO".to_string(),
         };

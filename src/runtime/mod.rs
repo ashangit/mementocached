@@ -5,6 +5,7 @@ use crate::protos::kv;
 use crate::protos::kv::Request;
 use crate::Error;
 use ahash::{AHasher, HashMap, HashMapExt};
+use protobuf::Message;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -151,9 +152,10 @@ impl SocketProcessor {
 
     pub async fn read(&mut self) {
         loop {
-            match self.connection.read_request().await {
-                Ok(Some(request)) => {
+            match self.connection.read_message().await {
+                Ok(Some(buffer)) => {
                     debug!("processing request");
+                    let request: Request = Message::parse_from_bytes(&buffer).unwrap();
                     self.process(request).await;
                 }
                 Ok(None) => {
@@ -218,15 +220,11 @@ impl SocketProcessor {
         }
 
         // Await the response
-        match resp_rx.await {
-            Ok(x) => {
-                let reply = x.unwrap();
+        if let Ok(x) = resp_rx.await {
+            let reply = x.unwrap();
 
-                // Write the response to the client
-                //
-                self.connection.write_reply(reply).await.unwrap();
-            }
-            Err(_) => (),
+            // Write the response to the client
+            self.connection.write_message(reply).await.unwrap();
         }
     }
 
@@ -279,7 +277,7 @@ impl DBManagerRuntime {
                     let worker_rt_res = DBWorkerRuntime::new();
                     match worker_rt_res {
                         Ok(mut worker_rt) => {
-                            worker_rt.start(rx);
+                            worker_rt.start(rx).unwrap();
                         }
                         Err(issue) => {
                             error!("Failed to create worker db {}", issue)
@@ -327,7 +325,7 @@ impl DBWorkerRuntime {
                         DBAction::Set(set) => set.execute(db),
                         DBAction::Delete(delete) => delete.execute(db),
                     };
-                    resp_tx.send(Ok(reply.unwrap()));
+                    resp_tx.send(Ok(reply.unwrap())).unwrap();
                 });
             }
         });
