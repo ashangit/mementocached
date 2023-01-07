@@ -1,30 +1,51 @@
+use ahash::{HashMap, HashMapExt};
+use protobuf::Message;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 use crate::protos::kv;
 use crate::Responder;
-use ahash::HashMap;
-
-use protobuf::Message;
-use tokio::sync::MutexGuard;
-
-pub mod connection;
 
 pub type CommandProcess = (DBAction, Responder<Vec<u8>>);
 
 #[derive(Debug)]
 pub enum DBAction {
-    Get(Get),
-    Set(Set),
-    Delete(Delete),
+    Get(kv::GetRequest),
+    Set(kv::SetRequest),
+    Delete(kv::DeleteRequest),
 }
 
-#[derive(Debug)]
-pub struct Get {
-    pub request: kv::GetRequest,
+#[derive(Clone)]
+pub struct DB {
+    data: Arc<Mutex<HashMap<String, Vec<u8>>>>,
 }
 
-impl Get {
-    pub fn execute(&self, db: MutexGuard<HashMap<String, Vec<u8>>>) -> protobuf::Result<Vec<u8>> {
+impl Default for DB {
+    fn default() -> Self {
+        DB::new()
+    }
+}
+
+impl DB {
+    pub fn new() -> Self {
+        let data: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+
+        DB { data }
+    }
+
+    pub async fn execute(&self, cmd: DBAction) -> protobuf::Result<Vec<u8>> {
+        match cmd {
+            DBAction::Get(get) => self.get(&get.key).await,
+            DBAction::Set(set) => self.set(&set.key, &set.value).await,
+            DBAction::Delete(delete) => self.delete(&delete.key).await,
+        }
+    }
+
+    async fn get(&self, key: &String) -> protobuf::Result<Vec<u8>> {
+        let data = self.data.lock().await;
+
         let mut reply = kv::GetReply::new();
-        match db.get(&self.request.key) {
+        match data.get(key) {
             Some(x) => {
                 reply.value = Vec::from(x.as_slice());
             }
@@ -32,41 +53,94 @@ impl Get {
         };
         reply.write_to_bytes()
     }
-}
 
-#[derive(Debug)]
-pub struct Set {
-    pub request: kv::SetRequest,
-}
+    async fn set(&self, key: &str, value: &[u8]) -> protobuf::Result<Vec<u8>> {
+        let mut data = self.data.lock().await;
 
-impl Set {
-    pub fn execute(
-        &self,
-        mut db: MutexGuard<HashMap<String, Vec<u8>>>,
-    ) -> protobuf::Result<Vec<u8>> {
-        db.insert(self.request.key.clone(), self.request.value.to_vec());
+        data.insert(key.to_string(), value.to_vec());
         // Ignore errors
         let mut reply = kv::SetReply::new();
         reply.status = true;
 
         reply.write_to_bytes()
     }
-}
 
-#[derive(Debug)]
-pub struct Delete {
-    pub request: kv::DeleteRequest,
-}
+    async fn delete(&self, key: &String) -> protobuf::Result<Vec<u8>> {
+        let mut data = self.data.lock().await;
 
-impl Delete {
-    pub fn execute(
-        &self,
-        mut db: MutexGuard<HashMap<String, Vec<u8>>>,
-    ) -> protobuf::Result<Vec<u8>> {
-        db.remove(self.request.key.as_str());
+        data.remove(key);
         // Ignore errors
         let mut reply = kv::DeleteReply::new();
         reply.status = true;
         reply.write_to_bytes()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::protos::kv::{DeleteReply, GetReply, SetReply};
+
+    use super::*;
+
+    async fn do_get(key: String, db: &DB) -> GetReply {
+        let mut get_request = kv::GetRequest::new();
+        get_request.key = key;
+        let cmd = DBAction::Get(get_request);
+
+        let reply = db.execute(cmd).await.unwrap();
+        return Message::parse_from_bytes(reply.as_slice()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn get() {
+        let db: DB = DB::new();
+        db.data
+            .lock()
+            .await
+            .insert("key".to_string(), "value".as_bytes().to_vec());
+
+        let get_reply = do_get("key".to_string(), &db).await;
+        assert_eq!(get_reply.value, "value".as_bytes().to_vec());
+
+        let get_reply = do_get("key_not_found".to_string(), &db).await;
+        assert_eq!(get_reply.value, "".as_bytes().to_vec());
+        assert_eq!(get_reply.err, "KO");
+    }
+
+    #[tokio::test]
+    async fn set() {
+        let db: DB = DB::new();
+
+        let mut set_request = kv::SetRequest::new();
+        set_request.key = "key".to_string();
+        set_request.value = "value".as_bytes().to_vec();
+        let cmd = DBAction::Set(set_request);
+
+        let reply = db.execute(cmd).await.unwrap();
+        let set_reply: SetReply = Message::parse_from_bytes(reply.as_slice()).unwrap();
+        assert!(set_reply.status);
+
+        let tmp_db = db.data.lock().await;
+        assert_eq!("value".as_bytes().to_vec(), *tmp_db.get("key").unwrap());
+    }
+
+    #[tokio::test]
+    async fn delete() {
+        let db: DB = DB::new();
+        db.data
+            .lock()
+            .await
+            .insert("key".to_string(), "value".as_bytes().to_vec());
+
+        let mut delete_request = kv::DeleteRequest::new();
+        delete_request.key = "key".to_string();
+        let cmd = DBAction::Delete(delete_request);
+
+        let reply = db.execute(cmd).await.unwrap();
+        let set_reply: DeleteReply = Message::parse_from_bytes(reply.as_slice()).unwrap();
+        assert!(set_reply.status);
+
+        let tmp_db = db.data.lock().await;
+        assert_eq!(None, tmp_db.get("key"));
     }
 }

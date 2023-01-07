@@ -1,4 +1,5 @@
-S3 create -> send event to eventbridge -> to sqs -> watch on the engine and action
+# memtocached
 
-# TODO add encryptio once first message is well sent and processed by engine
-# TODO add other type of messages (but directly to the sqs)
+This is a rust learning project
+
+No specific expectation on that KV store

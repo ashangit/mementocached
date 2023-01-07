@@ -1,7 +1,10 @@
+use std::net::TcpListener;
+
+use crate::Error;
+use axum::http::StatusCode;
+use axum::routing::get;
+use axum::Router;
 use lazy_static::lazy_static;
-use poem::http::StatusCode;
-use poem::listener::TcpListener;
-use poem::{get, handler, Route, Server};
 use prometheus::{register_int_counter_vec, IntCounterVec, Opts};
 use tracing::{error, info};
 
@@ -19,7 +22,6 @@ lazy_static! {
 ///
 /// * Return ok string
 ///
-#[handler]
 async fn healthz_handler() -> Result<&'static str, StatusCode> {
     Ok("ok")
 }
@@ -32,13 +34,13 @@ async fn healthz_handler() -> Result<&'static str, StatusCode> {
 ///
 /// * Return prometheus metrics string or https status code representing the faced issue
 ///
-#[handler]
 async fn metrics_handler() -> Result<String, StatusCode> {
     use prometheus::Encoder;
     let encoder = prometheus::TextEncoder::new();
 
     let mut buffer = Vec::new();
     if let Err(_e) = encoder.encode(&prometheus::gather(), &mut buffer) {
+        //error!("could not encode prometheus metrics: {}", e.into());
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
     let res = match String::from_utf8(buffer) {
@@ -51,25 +53,68 @@ async fn metrics_handler() -> Result<String, StatusCode> {
     Ok(res)
 }
 
-/// Initialize the webserver for healthz and metrics endpoint
-/// Used to expose prometheus metrics
-///
-/// # Arguments
-///
-/// * `http_port` - listening port of the webserver
-///
-#[async_backtrace::framed]
-pub async fn init_prometheus_http_endpoint(
-    http_port: u16,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let app = Route::new()
-        .at("/healthz", get(healthz_handler))
-        .at("/metrics", get(metrics_handler));
+#[derive(Debug)]
+pub struct HttpEndpoint {
+    pub listener: TcpListener,
+    app: Router,
+}
 
-    info!(port = http_port, "Start http endpoint");
-    Server::new(TcpListener::bind(format!("0.0.0.0:{http_port}")))
-        .run(app)
-        .await?;
+impl HttpEndpoint {
+    pub fn new(port: u16) -> Result<Self, Error> {
+        let listener = TcpListener::bind(format!("0.0.0.0:{port}")).unwrap();
 
-    Ok(())
+        let app = Router::new()
+            .route("/healthz", get(healthz_handler))
+            .route("/metrics", get(metrics_handler));
+
+        Ok(HttpEndpoint { listener, app })
+    }
+
+    /// Start the webserver for healthz and metrics endpoint
+    /// Used to expose prometheus metrics
+    ///
+    /// # Arguments
+    ///
+    ///
+    pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let local_addr = self.listener.local_addr().unwrap().to_string();
+        let listener = self.listener.try_clone().unwrap();
+        let app = self.app.clone();
+        match axum::Server::from_tcp(listener) {
+            Ok(server) => {
+                info!(
+                    "Http server for metrics endpoint listening on {}",
+                    local_addr
+                );
+                server.serve(app.into_make_service()).await?;
+            }
+            Err(error) => error!(
+                "Failed to start http endpoint on port {} due to {}",
+                local_addr, error
+            ),
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_healthz_handler() {
+        assert_eq!("ok", healthz_handler().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_metrics_handler() {
+        NUMBER_OF_REQUESTS.with_label_values(&["get"]).inc();
+        NUMBER_OF_REQUESTS.with_label_values(&["get"]).inc();
+        NUMBER_OF_REQUESTS.with_label_values(&["set"]).inc();
+        let metrics = metrics_handler().await.unwrap();
+        assert!(metrics.contains("process_cpu_seconds_total"));
+        assert!(metrics.contains("number_of_requests{type=\"get\"} 2"));
+        assert!(metrics.contains("number_of_requests{type=\"set\"} 1"));
+    }
 }

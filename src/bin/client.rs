@@ -1,14 +1,14 @@
-use mementocached::protos::kv;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use argparse::{ArgumentParser, Store};
-use mementocached::command::connection::Connection;
-use mementocached::protos::kv::{DeleteReply, GetReply, SetReply};
-
 use protobuf::Message;
 use rand::{distributions::Alphanumeric, Rng};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::io;
 use tokio::net::TcpStream;
+
+use mementocached::connection::Connection;
+use mementocached::protos::kv;
+use mementocached::protos::kv::{DeleteReply, GetReply, SetReply};
 
 async fn client_action(server_socket: String) {
     let socket = TcpStream::connect(server_socket).await.unwrap();

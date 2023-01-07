@@ -1,7 +1,9 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
-use mementocached::Error;
 
-use mementocached::runtime::{CoreRuntime, DBManagerRuntime, SocketReaderRuntime};
+use mementocached::runtime::core::CoreRuntime;
+use mementocached::runtime::db::DBManagerRuntime;
+use mementocached::runtime::socket::SocketReaderRuntime;
+use mementocached::Error;
 
 // TODO each thread manage it's own hashmap
 fn main() -> Result<(), Error> {
