@@ -54,17 +54,17 @@ impl DB {
     ///
     pub async fn execute(&self, cmd: DBAction) -> protobuf::Result<Vec<u8>> {
         match cmd {
-            DBAction::Get(get) => self.get(&get.key).await,
-            DBAction::Set(set) => self.set(&set.key, &set.value).await,
-            DBAction::Delete(delete) => self.delete(&delete.key).await,
+            DBAction::Get(get) => self.get(get.key).await,
+            DBAction::Set(set) => self.set(set.key, set.value).await,
+            DBAction::Delete(delete) => self.delete(delete.key).await,
         }
     }
 
-    async fn get(&self, key: &String) -> protobuf::Result<Vec<u8>> {
+    async fn get(&self, key: String) -> protobuf::Result<Vec<u8>> {
         let data = self.data.lock().await;
 
         let mut reply = kv::GetReply::new();
-        match data.get(key) {
+        match data.get(&key) {
             Some(x) => {
                 reply.value = Vec::from(x.as_slice());
             }
@@ -73,10 +73,10 @@ impl DB {
         reply.write_to_bytes()
     }
 
-    async fn set(&self, key: &str, value: &[u8]) -> protobuf::Result<Vec<u8>> {
+    async fn set(&self, key: String, value: Vec<u8>) -> protobuf::Result<Vec<u8>> {
         let mut data = self.data.lock().await;
 
-        data.insert(key.to_string(), value.to_vec());
+        data.insert(key, value);
         // Ignore errors
         let mut reply = kv::SetReply::new();
         reply.status = true;
@@ -84,10 +84,10 @@ impl DB {
         reply.write_to_bytes()
     }
 
-    async fn delete(&self, key: &String) -> protobuf::Result<Vec<u8>> {
+    async fn delete(&self, key: String) -> protobuf::Result<Vec<u8>> {
         let mut data = self.data.lock().await;
 
-        data.remove(key);
+        data.remove(&key);
         // Ignore errors
         let mut reply = kv::DeleteReply::new();
         reply.status = true;
