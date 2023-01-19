@@ -27,12 +27,31 @@ impl Default for DB {
 }
 
 impl DB {
+    /// Create a DB
+    /// Used to access a part of the whole database
+    /// Rely on a HashMap
+    ///
+    /// # Return
+    ///
+    /// * DB
+    ///
     pub fn new() -> Self {
         let data: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
 
         DB { data }
     }
 
+    /// Execute an action on the current DB
+    ///
+    /// # Arguments
+    ///
+    /// * `cmd` - DBAction: represent the action to execute with protobuf message containing
+    /// information for the action to execute
+    ///
+    /// # Return
+    ///
+    /// * protobuf::Result<Vec<u8>> - bytes representing the protobuf message reply to the request
+    ///
     pub async fn execute(&self, cmd: DBAction) -> protobuf::Result<Vec<u8>> {
         match cmd {
             DBAction::Get(get) => self.get(&get.key).await,

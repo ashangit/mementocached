@@ -1,7 +1,6 @@
 * ensure all tests work
 * review protocol and error in request/reply
 * update logging and error mgt => release 0.1.0
-* add docstring
 
 * add metrics => release 0.1.1
 

@@ -52,6 +52,25 @@ impl SocketReaderRuntime {
         })
     }
 
+    /// Start the socket reader runtime
+    /// It is in charge opening the DB socket and create a dedicated task (SocketProcessor)
+    /// for any connection accepted
+    ///
+    /// # Return
+    ///
+    /// * Result<(), Error>
+    ///
+    pub fn start(&mut self) -> Result<(), Error> {
+        let addr = self.addr.clone();
+        let workers_channel = self.workers_channel.clone();
+        self.rt.spawn(async move {
+            info!(socket = addr, "Start listening");
+            let listener = TcpListener::bind(addr.clone()).await.unwrap();
+            SocketReaderRuntime::accept_connection(listener, workers_channel).await;
+        });
+        Ok(())
+    }
+
     async fn accept_connection(
         listener: TcpListener,
         workers_channel: Vec<Sender<CommandProcess>>,
@@ -66,17 +85,6 @@ impl SocketReaderRuntime {
                     .await;
             });
         }
-    }
-
-    pub fn start(&mut self) -> Result<(), Error> {
-        let addr = self.addr.clone();
-        let workers_channel = self.workers_channel.clone();
-        self.rt.spawn(async move {
-            info!(socket = addr, "Start listening");
-            let listener = TcpListener::bind(addr.clone()).await.unwrap();
-            SocketReaderRuntime::accept_connection(listener, workers_channel).await;
-        });
-        Ok(())
     }
 }
 
@@ -114,6 +122,15 @@ impl SocketProcessor {
         }
     }
 
+    /// Read the protobuf message from the client socket
+    /// Then send the message to the appropriate db worker, depending to the hash(key) modulo number
+    /// of db worker
+    /// Finally write back the result to the client socket
+    ///
+    /// # Return
+    ///
+    /// * Result<(), Error>
+    ///
     pub async fn read(&mut self) {
         loop {
             match self.connection.read_message().await {

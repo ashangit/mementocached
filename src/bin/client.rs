@@ -10,6 +10,10 @@ use mementocached::connection::Connection;
 use mementocached::protos::kv;
 use mementocached::protos::kv::{DeleteReply, GetReply, SetReply};
 
+/// This is a simple client used to validate the server
+/// Not usable as a real client
+/// A driver will be needed to be created to be able to easily create real clients
+///
 async fn client_action(server_socket: String) {
     let socket = TcpStream::connect(server_socket).await.unwrap();
     let mut connection = Connection::new(socket);

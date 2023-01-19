@@ -19,6 +19,7 @@ impl DBManagerRuntime {
     ///
     /// # Arguments
     ///
+    /// * `nb_workers` - number of db worker to start
     ///
     /// # Return
     ///
@@ -35,6 +36,13 @@ impl DBManagerRuntime {
         })
     }
 
+    /// Start the DB manager runtime
+    /// This runtime is in charge of starting the DB worker runtime in a dedicated thread
+    ///
+    /// # Return
+    ///
+    /// * Result<(), Error>
+    ///
     pub fn start(&mut self) -> Result<(), Error> {
         for worker_index in 0..self.nb_workers {
             let (tx, rx) = mpsc::channel::<CommandProcess>(self.worker_channel_buffer_size);
@@ -65,9 +73,6 @@ struct DBWorkerRuntime {
 impl DBWorkerRuntime {
     /// Create a new db worker runtime
     ///
-    /// # Arguments
-    ///
-    ///
     /// # Return
     ///
     /// * Result<DBWorkerRuntime, Error>
@@ -80,6 +85,14 @@ impl DBWorkerRuntime {
         Ok(DBWorkerRuntime { rt })
     }
 
+    /// Start a db worker runtime
+    /// It is in charge of managing one DB (HashMap containing aportion of the data)
+    /// and to run the associated event loop that will execute action in front of that DB
+    ///
+    /// # Return
+    ///
+    /// * Result<(), Error>
+    ///
     pub fn start(&mut self, mut rx: Receiver<CommandProcess>) -> Result<(), Error> {
         self.rt.block_on(async move {
             let db: DB = DB::new();
@@ -124,7 +137,7 @@ mod tests {
             let reply: SetReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
             assert!(reply.status);
         } else {
-            assert!(false);
+            panic!();
         }
 
         // Get request
@@ -139,7 +152,7 @@ mod tests {
             let reply: GetReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
             assert_eq!(reply.value, "value".as_bytes().to_vec());
         } else {
-            assert!(false);
+            panic!();
         }
 
         // Delete request
@@ -154,7 +167,7 @@ mod tests {
             let reply: DeleteReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
             assert!(reply.status);
         } else {
-            assert!(false);
+            panic!();
         }
 
         // Get request
@@ -169,7 +182,7 @@ mod tests {
             let reply: GetReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
             assert_eq!(reply.err, "KO");
         } else {
-            assert!(false);
+            panic!();
         }
     }
 }

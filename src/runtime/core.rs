@@ -31,6 +31,13 @@ impl CoreRuntime {
         Ok(CoreRuntime { http_endpoint, rt })
     }
 
+    /// Start the core runtime
+    /// This runtime is in charge of core components (HttpEndpoint, ...)
+    ///
+    /// # Return
+    ///
+    /// * Result<(), Error>
+    ///
     pub fn start(&mut self) -> Result<(), Error> {
         self.rt.block_on(async {
             if let Err(issue) = self.http_endpoint.start().await {

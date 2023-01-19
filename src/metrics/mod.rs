@@ -60,6 +60,18 @@ pub struct HttpEndpoint {
 }
 
 impl HttpEndpoint {
+    /// Http endpoint
+    ///
+    /// expose metrics and healthz endpoint
+    ///
+    /// # Arguments
+    ///
+    /// * `port` - the http port to expose
+    ///
+    /// # Return
+    ///
+    /// * Return HttpEndpoint
+    ///
     pub fn new(port: u16) -> Result<Self, Error> {
         let listener = TcpListener::bind(format!("0.0.0.0:{port}")).unwrap();
 

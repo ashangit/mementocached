@@ -11,12 +11,29 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Create object representing a connection
+    ///
+    /// # Arguments
+    ///
+    /// * `stream` - the TcpStream connected to the open socket
+    ///
+    /// # Return
+    ///
+    /// * Connection
+    ///
     pub fn new(stream: TcpStream) -> Self {
         Connection {
             stream: BufWriter::new(stream),
         }
     }
 
+    /// Read a protobuf message from the stream
+    ///
+    /// # Return
+    ///
+    /// * Result<Option<BytesMut>, Error>: Set of bytes of the protobuf message or None/Err
+    /// if issue to receive the whole message
+    ///
     pub async fn read_message(&mut self) -> Result<Option<BytesMut>, Error> {
         let request_size: usize = self.stream.read_u64().await? as usize;
 
@@ -47,6 +64,12 @@ impl Connection {
         }
     }
 
+    /// Write bytes to the socket
+    ///
+    /// # Return
+    ///
+    /// * Result<(), Error>
+    ///
     pub async fn write_message(&mut self, reply: Vec<u8>) -> Result<(), Error> {
         let slice = [reply.len().to_be_bytes().as_slice(), reply.as_slice()].concat();
         self.stream.write_all(slice.as_slice()).await?;
