@@ -6,6 +6,7 @@ use axum::routing::get;
 use axum::Router;
 use lazy_static::lazy_static;
 use prometheus::{register_int_counter_vec, IntCounterVec, Opts};
+use tracing::log::debug;
 use tracing::{error, info};
 
 lazy_static! {
@@ -23,6 +24,7 @@ lazy_static! {
 /// * Return ok string
 ///
 async fn healthz_handler() -> Result<&'static str, StatusCode> {
+    debug!("Handle health endpoint call");
     Ok("ok")
 }
 
@@ -35,6 +37,7 @@ async fn healthz_handler() -> Result<&'static str, StatusCode> {
 /// * Return prometheus metrics string or https status code representing the faced issue
 ///
 async fn metrics_handler() -> Result<String, StatusCode> {
+    debug!("Handle metrics endpoint call");
     use prometheus::Encoder;
     let encoder = prometheus::TextEncoder::new();
 

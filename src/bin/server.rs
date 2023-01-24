@@ -1,4 +1,5 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
+use tracing::info;
 
 use mementocached::runtime::core::CoreRuntime;
 use mementocached::runtime::db::DBManagerRuntime;
@@ -42,6 +43,7 @@ fn main() -> Result<(), Error> {
     // Init tokio console subscriber if enabled
     // Used to debug trace async task with https://github.com/tokio-rs/console
     if debug_mode {
+        info!("Init console subscriber for async task debugging");
         console_subscriber::init();
     }
 

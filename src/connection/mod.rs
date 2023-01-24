@@ -7,6 +7,7 @@ use crate::Error;
 
 #[derive(Debug)]
 pub struct Connection {
+    client_addr: String,
     stream: BufWriter<TcpStream>,
 }
 
@@ -23,6 +24,7 @@ impl Connection {
     ///
     pub fn new(stream: TcpStream) -> Self {
         Connection {
+            client_addr: stream.local_addr().unwrap().to_string(),
             stream: BufWriter::new(stream),
         }
     }
@@ -37,7 +39,11 @@ impl Connection {
     pub async fn read_message(&mut self) -> Result<Option<BytesMut>, Error> {
         let request_size: usize = self.stream.read_u64().await? as usize;
 
-        debug!(size = request_size, "Request size");
+        debug!(
+            client_addr = self.client_addr,
+            size = request_size,
+            "Read request message from client"
+        );
 
         if 0 == request_size {
             return Ok(None);
@@ -71,6 +77,11 @@ impl Connection {
     /// * Result<(), Error>
     ///
     pub async fn write_message(&mut self, reply: Vec<u8>) -> Result<(), Error> {
+        debug!(
+            client_addr = self.client_addr,
+            size = reply.len(),
+            "Write response message to client"
+        );
         let slice = [reply.len().to_be_bytes().as_slice(), reply.as_slice()].concat();
         self.stream.write_all(slice.as_slice()).await?;
         self.stream.flush().await?;

@@ -2,6 +2,7 @@ use ahash::{HashMap, HashMapExt};
 use protobuf::Message;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::debug;
 
 use crate::protos::kv;
 use crate::Responder;
@@ -61,6 +62,7 @@ impl DB {
     }
 
     async fn get(&self, key: String) -> protobuf::Result<Vec<u8>> {
+        debug!(action = "get", key = key);
         let data = self.data.lock().await;
 
         let mut reply = kv::GetReply::new();
@@ -74,6 +76,7 @@ impl DB {
     }
 
     async fn set(&self, key: String, value: Vec<u8>) -> protobuf::Result<Vec<u8>> {
+        debug!(action = "set", key = key);
         let mut data = self.data.lock().await;
 
         data.insert(key, value);
@@ -85,6 +88,7 @@ impl DB {
     }
 
     async fn delete(&self, key: String) -> protobuf::Result<Vec<u8>> {
+        debug!(action = "delete", key = key);
         let mut data = self.data.lock().await;
 
         data.remove(&key);

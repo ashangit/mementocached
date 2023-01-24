@@ -41,7 +41,7 @@ impl SocketReaderRuntime {
             .thread_name_fn(|| {
                 static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
                 let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
-                format!("socket-reader-{}", id)
+                format!("socket-reader-{id}")
             })
             .build()?;
 
@@ -77,6 +77,10 @@ impl SocketReaderRuntime {
     ) {
         loop {
             let (stream, client_addr) = listener.accept().await.unwrap();
+            debug!(
+                client_addr = client_addr.to_string(),
+                "Accept connection from client"
+            );
 
             let workers_channel = workers_channel.clone();
             tokio::spawn(async move {
@@ -112,7 +116,6 @@ impl SocketProcessor {
         workers_channel: Vec<Sender<CommandProcess>>,
         client_addr: String,
     ) -> Self {
-        info!(client_addr = client_addr, "Accept connection from client");
         let connection = Connection::new(stream);
 
         SocketProcessor {
@@ -135,19 +138,22 @@ impl SocketProcessor {
         loop {
             match self.connection.read_message().await {
                 Ok(Some(buffer)) => {
-                    debug!("processing request");
+                    debug!("Parse request");
                     let request: Request = Message::parse_from_bytes(&buffer).unwrap();
                     self.process(request).await;
                 }
                 Ok(None) => {
-                    info!(client_addr = self.client_addr, "Disconnect from client");
+                    info!(
+                        client_addr = self.client_addr,
+                        "Connection closed by client"
+                    );
                     return;
                 }
                 Err(issue) => {
                     error!(
                         client_addr = self.client_addr,
                         issue = issue,
-                        "Failure processing event from client"
+                        "Failure reading message from client"
                     );
                     return;
                 }
@@ -159,40 +165,49 @@ impl SocketProcessor {
         let (resp_tx, resp_rx) = oneshot::channel();
 
         match request.command.unwrap() {
-            kv::request::Command::Get(get) => {
+            kv::request::Command::Get(request) => {
                 NUMBER_OF_REQUESTS.with_label_values(&["get"]).inc();
 
                 // Send the GET request
-                let modulo: usize = self.calculate_modulo(&get.key);
-                debug!(modulo = modulo, "get");
+                let modulo: usize = self.calculate_modulo(&request.key);
+                debug!(
+                    key = request.key,
+                    "Send get request to DB worker {}", modulo
+                );
 
-                let cmd = DBAction::Get(get);
-                match self.workers_channel[modulo].send((cmd, resp_tx)).await {
-                    Ok(_x) => debug!("ok"),
-                    Err(issue) => error!("issue {}", issue),
-                };
-            }
-            kv::request::Command::Set(set) => {
-                NUMBER_OF_REQUESTS.with_label_values(&["set"]).inc();
-
-                // Send the SET request
-                let modulo: usize = self.calculate_modulo(&set.key);
-                debug!(modulo = modulo, "set");
-
-                let cmd = DBAction::Set(set);
+                let cmd = DBAction::Get(request);
                 self.workers_channel[modulo]
                     .send((cmd, resp_tx))
                     .await
                     .unwrap();
             }
-            kv::request::Command::Delete(delete) => {
+            kv::request::Command::Set(request) => {
+                NUMBER_OF_REQUESTS.with_label_values(&["set"]).inc();
+
+                // Send the SET request
+                let modulo: usize = self.calculate_modulo(&request.key);
+                debug!(
+                    key = request.key,
+                    "Send set request to DB worker {}", modulo
+                );
+
+                let cmd = DBAction::Set(request);
+                self.workers_channel[modulo]
+                    .send((cmd, resp_tx))
+                    .await
+                    .unwrap();
+            }
+            kv::request::Command::Delete(request) => {
                 NUMBER_OF_REQUESTS.with_label_values(&["delete"]).inc();
 
                 // Send the DELETE request
-                let modulo: usize = self.calculate_modulo(&delete.key);
-                debug!(modulo = modulo, "delete");
+                let modulo: usize = self.calculate_modulo(&request.key);
+                debug!(
+                    key = request.key,
+                    "Send delete request to DB worker {}", modulo
+                );
 
-                let cmd = DBAction::Delete(delete);
+                let cmd = DBAction::Delete(request);
                 self.workers_channel[modulo]
                     .send((cmd, resp_tx))
                     .await
@@ -202,6 +217,7 @@ impl SocketProcessor {
 
         // Await the response
         if let Ok(result) = resp_rx.await {
+            debug!("Get response message from DB worker");
             let reply = result.unwrap();
 
             // Write the response to the client

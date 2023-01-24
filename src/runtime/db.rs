@@ -3,7 +3,7 @@ use std::thread;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::command::{CommandProcess, DB};
 use crate::Error;
@@ -48,6 +48,11 @@ impl DBManagerRuntime {
             let (tx, rx) = mpsc::channel::<CommandProcess>(self.worker_channel_buffer_size);
             self.workers_channel.push(tx);
 
+            info!(
+                "Start database worker {}/{}",
+                worker_index + 1,
+                self.nb_workers
+            );
             let _ = thread::Builder::new()
                 .name(format!("worker-{worker_index}"))
                 .spawn(|| {
@@ -86,7 +91,7 @@ impl DBWorkerRuntime {
     }
 
     /// Start a db worker runtime
-    /// It is in charge of managing one DB (HashMap containing aportion of the data)
+    /// It is in charge of managing one DB (HashMap containing a portion of the data)
     /// and to run the associated event loop that will execute action in front of that DB
     ///
     /// # Return
