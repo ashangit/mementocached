@@ -25,7 +25,7 @@ build:
 	 cargo build --verbose
 
 .PHONY: release
-build:
+release:
 	 cargo build --release
 
 .PHONY: lint

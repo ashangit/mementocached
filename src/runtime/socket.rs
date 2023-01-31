@@ -152,7 +152,7 @@ impl SocketProcessor {
                 Err(issue) => {
                     error!(
                         client_addr = self.client_addr,
-                        issue = issue,
+                        issue = issue.to_string(),
                         "Failure reading message from client"
                     );
                     return;

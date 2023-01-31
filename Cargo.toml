@@ -23,6 +23,8 @@ protobuf = { version = "3", features = ["with-bytes"] }
 # Log
 tracing = "0"
 tracing-subscriber = "0"
+# Error management
+thiserror = "1"
 # Prometheus
 prometheus = { version = "0", features = ["process"] }
 lazy_static = "1"

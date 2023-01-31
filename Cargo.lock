@@ -802,6 +802,7 @@ dependencies = [
  "protobuf-codegen",
  "rand",
  "reqwest",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
