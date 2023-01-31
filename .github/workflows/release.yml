@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install protoc
+        uses: arduino/setup-protoc@v1
+      - name: Build
+        run: cargo build --release --locked
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/release/server
