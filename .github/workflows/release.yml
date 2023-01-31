@@ -16,13 +16,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Setup rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Install protoc
         uses: arduino/setup-protoc@v1
       - name: Build
         run: cargo build --release --locked
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v2
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: --latest --strip header --verbose
+        env:
+          OUTPUT: CHANGELOG.md
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
+          body_path: ${{ steps.git-cliff.outputs.changelog }}
           files: target/release/server
