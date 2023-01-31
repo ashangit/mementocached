@@ -1,4 +1,3 @@
-* ensure all tests work
 * review protocol and error in request/reply
 * update error mgt => release 0.1.0
 
