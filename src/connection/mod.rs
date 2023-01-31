@@ -1,7 +1,8 @@
+use crate::Error;
 use bytes::BytesMut;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
-use tracing::debug;
+use tracing::{debug, error};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectionError {
@@ -31,11 +32,12 @@ impl Connection {
     ///
     /// * Connection
     ///
-    pub fn new(stream: TcpStream) -> Self {
-        Connection {
-            client_addr: stream.local_addr().unwrap().to_string(),
+    pub fn new(stream: TcpStream) -> Result<Self, Error> {
+        let client_addr = stream.local_addr()?.to_string();
+        Ok(Connection {
+            client_addr,
             stream: BufWriter::new(stream),
-        }
+        })
     }
 
     /// Read a protobuf message from the stream
@@ -121,7 +123,7 @@ mod tests {
                 .unwrap();
             rt.block_on(async {
                 let socket_client = TcpStream::connect(addr).await.unwrap();
-                let mut connection_client = Connection::new(socket_client);
+                let mut connection_client = Connection::new(socket_client).unwrap();
 
                 connection_client
                     .write_message(message_send.as_bytes().to_vec())
@@ -131,7 +133,7 @@ mod tests {
         });
 
         let (stream, _) = listener.accept().await.unwrap();
-        let mut connection_server = Connection::new(stream);
+        let mut connection_server = Connection::new(stream).unwrap();
 
         let buffer = connection_server.read_message().await.unwrap().unwrap();
         let message_rcv = std::str::from_utf8(&buffer).unwrap();
@@ -172,7 +174,7 @@ mod tests {
         });
 
         let (stream, _) = listener.accept().await.unwrap();
-        let mut connection_server = Connection::new(stream);
+        let mut connection_server = Connection::new(stream).unwrap();
 
         let buffer = connection_server.read_message().await.unwrap().unwrap();
         let message_rcv = std::str::from_utf8(&buffer).unwrap();
@@ -201,7 +203,7 @@ mod tests {
         });
 
         let (stream, _) = listener.accept().await.unwrap();
-        let mut connection_server = Connection::new(stream);
+        let mut connection_server = Connection::new(stream).unwrap();
 
         let buffer = connection_server.read_message().await;
         assert!(buffer.is_err())

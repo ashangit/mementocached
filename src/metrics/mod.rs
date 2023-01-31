@@ -1,11 +1,9 @@
-use std::net::TcpListener;
-
-use crate::Error;
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::Router;
 use lazy_static::lazy_static;
 use prometheus::{register_int_counter_vec, IntCounterVec, Opts};
+use std::net::TcpListener;
 use tracing::log::debug;
 use tracing::{error, info};
 
@@ -75,14 +73,16 @@ impl HttpEndpoint {
     ///
     /// * Return HttpEndpoint
     ///
-    pub fn new(port: u16) -> Result<Self, Error> {
-        let listener = TcpListener::bind(format!("0.0.0.0:{port}")).unwrap();
+    pub fn new(port: u16) -> Self {
+        let socket = format!("0.0.0.0:{port}");
+        let listener =
+            TcpListener::bind(&socket).unwrap_or_else(|_| panic!("Failed to bind socket {socket}"));
 
         let app = Router::new()
             .route("/healthz", get(healthz_handler))
             .route("/metrics", get(metrics_handler));
 
-        Ok(HttpEndpoint { listener, app })
+        HttpEndpoint { listener, app }
     }
 
     /// Start the webserver for healthz and metrics endpoint
@@ -92,8 +92,15 @@ impl HttpEndpoint {
     ///
     ///
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let local_addr = self.listener.local_addr().unwrap().to_string();
-        let listener = self.listener.try_clone().unwrap();
+        let local_addr = self
+            .listener
+            .local_addr()
+            .expect("Failed to get socket for metrics endpoint")
+            .to_string();
+        let listener = self
+            .listener
+            .try_clone()
+            .expect("Failed to clone socket handler for metrics endpoint");
         let app = self.app.clone();
         match axum::Server::from_tcp(listener) {
             Ok(server) => {

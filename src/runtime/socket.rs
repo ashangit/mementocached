@@ -84,9 +84,10 @@ impl SocketReaderRuntime {
 
             let workers_channel = workers_channel.clone();
             tokio::spawn(async move {
-                SocketProcessor::new(stream, workers_channel, client_addr.to_string())
-                    .read()
-                    .await;
+                match SocketProcessor::new(stream, workers_channel, client_addr.to_string()) {
+                    Ok(mut socket_processor) => socket_processor.read().await,
+                    Err(issue) => error!("Failed to manage client connection: {issue}"),
+                };
             });
         }
     }
@@ -115,14 +116,14 @@ impl SocketProcessor {
         stream: TcpStream,
         workers_channel: Vec<Sender<CommandProcess>>,
         client_addr: String,
-    ) -> Self {
-        let connection = Connection::new(stream);
+    ) -> Result<Self, Error> {
+        let connection = Connection::new(stream)?;
 
-        SocketProcessor {
+        Ok(SocketProcessor {
             connection,
             workers_channel,
             client_addr,
-        }
+        })
     }
 
     /// Read the protobuf message from the client socket

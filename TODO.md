@@ -1,5 +1,4 @@
 * review protocol and error in request/reply
-* update error mgt
 
 * add metrics
 

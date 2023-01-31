@@ -26,7 +26,7 @@ impl CoreRuntime {
             .thread_name("core")
             .build()?;
 
-        let http_endpoint = HttpEndpoint::new(port).unwrap();
+        let http_endpoint = HttpEndpoint::new(port);
 
         Ok(CoreRuntime { http_endpoint, rt })
     }

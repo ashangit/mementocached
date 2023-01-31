@@ -29,11 +29,11 @@ release:
 	 cargo build --release
 
 .PHONY: lint
-lint: install-deps
+lint:
 	cargo clippy -- -D warnings
 
 .PHONY: fmt
-fmt: install-deps
+fmt:
 	cargo fmt --all -- --check
 
 .PHONY: test
@@ -41,7 +41,7 @@ test: lint fmt
 	cargo test
 
 .PHONY: unittest-coverage
-unittest-coverage: install-deps
+unittest-coverage:
 	rm -Rf target/coverage
 	mkdir -p target/coverage/profiles
 	CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='target/coverage/profiles/cargo-test-%p-%m.profraw' cargo test
