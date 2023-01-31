@@ -3,7 +3,7 @@ use std::thread;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::{error, info};
+use tracing::info;
 
 use crate::command::{CommandProcess, DB};
 use crate::Error;
@@ -56,15 +56,8 @@ impl DBManagerRuntime {
             let _ = thread::Builder::new()
                 .name(format!("worker-{worker_index}"))
                 .spawn(|| {
-                    let worker_rt_res = DBWorkerRuntime::new();
-                    match worker_rt_res {
-                        Ok(mut worker_rt) => {
-                            worker_rt.start(rx).unwrap();
-                        }
-                        Err(issue) => {
-                            error!("Failed to create worker db {}", issue)
-                        }
-                    }
+                    let mut worker_rt = DBWorkerRuntime::new().expect("Failed to init db worker");
+                    worker_rt.run(rx).expect("Failure running db worker");
                 });
         }
         Ok(())
@@ -90,7 +83,7 @@ impl DBWorkerRuntime {
         Ok(DBWorkerRuntime { rt })
     }
 
-    /// Start a db worker runtime
+    /// Run a db worker runtime
     /// It is in charge of managing one DB (HashMap containing a portion of the data)
     /// and to run the associated event loop that will execute action in front of that DB
     ///
@@ -98,7 +91,7 @@ impl DBWorkerRuntime {
     ///
     /// * Result<(), Error>
     ///
-    pub fn start(&mut self, mut rx: Receiver<CommandProcess>) -> Result<(), Error> {
+    pub fn run(&mut self, mut rx: Receiver<CommandProcess>) -> Result<(), Error> {
         self.rt.block_on(async move {
             let db: DB = DB::new();
 
@@ -106,7 +99,9 @@ impl DBWorkerRuntime {
                 let db = db.clone();
                 tokio::spawn(async move {
                     let reply: protobuf::Result<Vec<u8>> = db.execute(cmd).await;
-                    resp_tx.send(Ok(reply.unwrap())).unwrap();
+                    resp_tx
+                        .send(Ok(reply.expect("Not an expected protobuf Result message")))
+                        .expect("Failed to send response to the socket worker");
                 });
             }
         });

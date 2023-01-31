@@ -16,7 +16,7 @@ use mementocached::protos::kv::{DeleteReply, GetReply, SetReply};
 ///
 async fn client_action(server_socket: String) {
     let socket = TcpStream::connect(server_socket).await.unwrap();
-    let mut connection = Connection::new(socket);
+    let mut connection = Connection::new(socket).unwrap();
 
     let key_suffix: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
