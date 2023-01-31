@@ -1,7 +1,7 @@
 * review protocol and error in request/reply
-* update error mgt => release 0.1.0
+* update error mgt
 
-* add metrics => release 0.1.1
+* add metrics
 
 * see if possible to merge socket and db workers.
 Idea is having a one thread per core reading from the socket and managing is set of db data.
@@ -13,7 +13,7 @@ Perhaps having the socket in the core and after each accept send the stream to a
 * look at https://tokio.rs/blog/2023-01-03-announcing-turmoil for testing
 
 * update worker to manage 4k of hashmap spread on all workers
-* manage on disk data => release as 0.2.0
+* manage on disk data
 * multi node
   * define archi and mechanism
   * split in multiple step (replication, recover, spread...)

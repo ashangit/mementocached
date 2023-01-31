@@ -3,7 +3,16 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use tracing::debug;
 
-use crate::Error;
+#[derive(thiserror::Error, Debug)]
+pub enum ConnectionError {
+    #[error("Connection reset by peer.")]
+    ResetByPeerError,
+    #[error("Socket IO failure: {source}")]
+    IoError {
+        #[from]
+        source: std::io::Error,
+    },
+}
 
 #[derive(Debug)]
 pub struct Connection {
@@ -36,7 +45,7 @@ impl Connection {
     /// * Result<Option<BytesMut>, Error>: Set of bytes of the protobuf message or None/Err
     /// if issue to receive the whole message
     ///
-    pub async fn read_message(&mut self) -> Result<Option<BytesMut>, Error> {
+    pub async fn read_message(&mut self) -> Result<Option<BytesMut>, ConnectionError> {
         let request_size: usize = self.stream.read_u64().await? as usize;
 
         debug!(
@@ -60,7 +69,7 @@ impl Connection {
                 if buffer.is_empty() {
                     return Ok(None);
                 } else {
-                    return Err("Connection reset by peer".into());
+                    return Err(ConnectionError::ResetByPeerError);
                 }
             }
 
@@ -76,7 +85,7 @@ impl Connection {
     ///
     /// * Result<(), Error>
     ///
-    pub async fn write_message(&mut self, reply: Vec<u8>) -> Result<(), Error> {
+    pub async fn write_message(&mut self, reply: Vec<u8>) -> Result<(), ConnectionError> {
         debug!(
             client_addr = self.client_addr,
             size = reply.len(),
