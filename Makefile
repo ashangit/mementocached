@@ -20,25 +20,24 @@ install-deps: venv
 deps:
 	cargo update
 
-.PHONY: fmt
-fmt: install-deps
-	cargo fmt --all
-
-.PHONY: lint
-lint: install-deps
-	cargo clippy --fix --allow-dirty --allow-staged
-
 .PHONY: build
+build:
+	 cargo build --verbose
+
+.PHONY: release
 build:
 	 cargo build --release
 
-.PHONY: test
-test: unittest
-	cargo fmt --all -- --check
+.PHONY: lint
+lint: install-deps
 	cargo clippy -- -D warnings
 
-.PHONY: unittest
-unittest: install-deps
+.PHONY: fmt
+fmt: install-deps
+	cargo fmt --all -- --check
+
+.PHONY: test
+test: lint fmt
 	cargo test
 
 .PHONY: unittest-coverage
@@ -47,7 +46,6 @@ unittest-coverage: install-deps
 	mkdir -p target/coverage/profiles
 	CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='target/coverage/profiles/cargo-test-%p-%m.profraw' cargo test
 	grcov ./target/coverage/profiles/ --binary-path ./target/debug/deps/ -s . -t markdown --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o coverage.md
-
 
 .PHONY: run
 run: test
