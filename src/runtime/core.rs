@@ -51,8 +51,9 @@ impl CoreRuntime {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::thread;
+
+    use super::*;
 
     #[tokio::test]
     async fn start_http_endpoint() {

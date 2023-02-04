@@ -53,7 +53,7 @@ fn main() -> Result<(), Error> {
 
     // Init socket reader runtime
     let mut socket_reader_rt =
-        SocketReaderRuntime::new(format!("127.0.0.1:{port}"), db_mgr_rt.workers_channel)?;
+        SocketReaderRuntime::new(format!("127.0.0.1:{port}"), db_mgr_rt.sockets_db_workers_tx)?;
     socket_reader_rt.start()?;
 
     // Init core runtime

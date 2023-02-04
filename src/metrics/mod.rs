@@ -1,9 +1,10 @@
+use std::net::TcpListener;
+
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::Router;
 use lazy_static::lazy_static;
 use prometheus::{register_int_counter_vec, IntCounterVec, Opts};
-use std::net::TcpListener;
 use tracing::log::debug;
 use tracing::{error, info};
 
