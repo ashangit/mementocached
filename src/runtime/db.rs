@@ -4,7 +4,6 @@ use std::thread;
 
 use ahash::AHasher;
 use protobuf::Message;
-use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error, info};
 
@@ -34,17 +33,17 @@ impl DBManagerRuntime {
     ///
     /// * Result<DBManagerRuntime, Error>
     ///
-    pub fn new(nb_workers: usize) -> Result<Self, Error> {
+    pub fn new(nb_workers: usize) -> Self {
         let worker_channel_buffer_size: usize = 32;
         let (sockets_db_workers_tx, sockets_db_workers_rx) =
             async_channel::bounded(worker_channel_buffer_size);
 
-        Ok(DBManagerRuntime {
+        DBManagerRuntime {
             nb_workers,
             worker_channel_buffer_size,
             sockets_db_workers_rx,
             sockets_db_workers_tx,
-        })
+        }
     }
 
     /// Start the DB manager runtime
@@ -55,9 +54,9 @@ impl DBManagerRuntime {
     /// * Result<(), Error>
     ///
     pub fn start(&mut self) -> Result<(), Error> {
-        let mut workers_db_action_tx: Vec<Sender<CommandProcess>> = Vec::new();
+        let mut workers_db_action_tx: Vec<mpsc::Sender<CommandProcess>> = Vec::new();
         let (broadcast_channel_to_workers, _) =
-            broadcast::channel::<Vec<Sender<CommandProcess>>>(1);
+            broadcast::channel::<Vec<mpsc::Sender<CommandProcess>>>(1);
 
         for worker_id in 0..self.nb_workers {
             let (db_action_tx, db_action_rx) =
@@ -85,8 +84,7 @@ impl DBManagerRuntime {
                             worker_thread_id,
                             db_action_rx,
                             sockets_db_workers_rx,
-                        )
-                        .expect("Failed to init db worker");
+                        );
                         worker_rt
                             .run(broadcast_channel_rcv_workers)
                             .await
@@ -105,7 +103,7 @@ impl DBManagerRuntime {
 struct DBWorkerRuntime {
     worker_id: usize,
     db: DB,
-    db_action_rx: Receiver<CommandProcess>,
+    db_action_rx: mpsc::Receiver<CommandProcess>,
     sockets_db_workers_rx: async_channel::Receiver<ClientStream>,
 }
 
@@ -118,15 +116,15 @@ impl DBWorkerRuntime {
     ///
     pub fn new(
         worker_id: usize,
-        db_action_rx: Receiver<CommandProcess>,
+        db_action_rx: mpsc::Receiver<CommandProcess>,
         sockets_db_workers_rx: async_channel::Receiver<ClientStream>,
-    ) -> Result<Self, Error> {
-        Ok(DBWorkerRuntime {
+    ) -> Self {
+        DBWorkerRuntime {
             worker_id,
             db: DB::new(),
             db_action_rx,
             sockets_db_workers_rx,
-        })
+        }
     }
 
     /// Run a db worker runtime
@@ -139,7 +137,7 @@ impl DBWorkerRuntime {
     ///
     pub async fn run(
         &mut self,
-        mut broadcast_channel_rcv_workers: broadcast::Receiver<Vec<Sender<CommandProcess>>>,
+        mut broadcast_channel_rcv_workers: broadcast::Receiver<Vec<mpsc::Sender<CommandProcess>>>,
     ) -> Result<(), Error> {
         let workers_db_action_tx = broadcast_channel_rcv_workers.recv().await.unwrap();
 
@@ -169,7 +167,7 @@ impl DBWorkerRuntime {
     fn process_db_action_from_socket(
         &mut self,
         client_stream: ClientStream,
-        workers_db_action_tx: Vec<Sender<CommandProcess>>,
+        workers_db_action_tx: Vec<mpsc::Sender<CommandProcess>>,
     ) {
         let db = self.db.clone();
         let local_worker_id = self.worker_id;

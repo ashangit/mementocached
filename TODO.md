@@ -2,11 +2,6 @@
 
 * add metrics
 
-* see if possible to merge socket and db workers.
-Idea is having a one thread per core reading from the socket and managing is set of db data.
-If the thread is not in charge of the key it will still send req to appropriate thread (as already performed).
-Need to validate if it has a good or bad impact on perf
-Perhaps having the socket in the core and after each accept send the stream to a topic that is read by all DB threads
 * Add assigning thread to a dedicated hyper thread => also see if better perf
 
 * look at https://tokio.rs/blog/2023-01-03-announcing-turmoil for testing
