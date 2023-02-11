@@ -1,8 +1,8 @@
-use std::hash::Hash;
 use std::hash::Hasher;
+use std::hash::{BuildHasher, Hash};
 use std::thread;
 
-use ahash::AHasher;
+use ahash::RandomState;
 use protobuf::Message;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error, info};
@@ -269,100 +269,60 @@ impl DBWorkerRuntime {
     }
 
     fn calculate_hash<T: Hash>(t: T) -> usize {
-        let mut hasher = AHasher::default();
+        let mut hasher = RandomState::with_seeds(0, 0, 0, 0).build_hasher();
         t.hash(&mut hasher);
         hasher.finish() as usize
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use protobuf::Message;
-//     use tokio::sync::oneshot;
-//
-//     use crate::command::DBAction;
-//     use crate::protos::kv::{
-//         DeleteReply, DeleteRequest, GetReply, GetRequest, SetReply, SetRequest,
-//     };
-//
-//     use super::*;
-//
-//     #[tokio::test]
-//     async fn call_db_worker() {
-//         let mut db_rt = DBManagerRuntime::new(2).unwrap();
-//         db_rt.start().unwrap();
-//
-//         // Set request
-//         let (resp_tx, resp_rx) = oneshot::channel();
-//         let mut set = SetRequest::new();
-//         set.key = "key".to_string();
-//         set.value = Vec::from("value");
-//         let cmd = DBAction::Set(set);
-//
-//         db_rt.workers_sender_mpsc[0]
-//             .send((cmd, resp_tx))
-//             .await
-//             .unwrap();
-//
-//         if let Ok(result) = resp_rx.await {
-//             let reply: SetReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
-//             assert!(reply.status);
-//         } else {
-//             panic!();
-//         }
-//
-//         // Get request
-//         let (resp_tx, resp_rx) = oneshot::channel();
-//         let mut get = GetRequest::new();
-//         get.key = "key".to_string();
-//         let cmd = DBAction::Get(get);
-//
-//         db_rt.workers_sender_mpsc[0]
-//             .send((cmd, resp_tx))
-//             .await
-//             .unwrap();
-//
-//         if let Ok(result) = resp_rx.await {
-//             let reply: GetReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
-//             assert_eq!(reply.value, "value".as_bytes().to_vec());
-//         } else {
-//             panic!();
-//         }
-//
-//         // Delete request
-//         let (resp_tx, resp_rx) = oneshot::channel();
-//         let mut delete = DeleteRequest::new();
-//         delete.key = "key".to_string();
-//         let cmd = DBAction::Delete(delete);
-//
-//         db_rt.workers_sender_mpsc[0]
-//             .send((cmd, resp_tx))
-//             .await
-//             .unwrap();
-//
-//         if let Ok(result) = resp_rx.await {
-//             let reply: DeleteReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
-//             assert!(reply.status);
-//         } else {
-//             panic!();
-//         }
-//
-//         // Get request
-//         let (resp_tx, resp_rx) = oneshot::channel();
-//         let mut get = GetRequest::new();
-//         get.key = "key".to_string();
-//         let cmd = DBAction::Get(get);
-//
-//         db_rt.workers_sender_mpsc[0]
-//             .send((cmd, resp_tx))
-//             .await
-//             .unwrap();
-//
-//         if let Ok(result) = resp_rx.await {
-//             let reply: GetReply = Message::parse_from_bytes(result.unwrap().as_slice()).unwrap();
-//             assert_eq!(reply.err, "KO");
-//         } else {
-//             panic!();
-//         }
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use crate::protos::kv::{DeleteRequest, GetRequest, SetRequest};
+
+    use super::*;
+
+    #[test]
+    fn compute_hash() {
+        let hash = DBWorkerRuntime::calculate_modulo("test_key", 6);
+        assert_eq!(hash, 0);
+    }
+
+    #[tokio::test]
+    async fn process() {
+        let len_vec = 6;
+        let mut set = SetRequest::new();
+        set.key = "key1".to_string();
+        set.value = Vec::from("value");
+        let mut request = Request::new();
+        request.set_set(set);
+        let (worker_id, db_action) = DBWorkerRuntime::process(request, len_vec).await;
+        assert_eq!(worker_id, 2);
+        let expected_action = match db_action {
+            DBAction::Set(_) => true,
+            _ => false,
+        };
+        assert!(expected_action);
+
+        let mut get = GetRequest::new();
+        get.key = "key".to_string();
+        let mut request = Request::new();
+        request.set_get(get);
+        let (_, db_action) = DBWorkerRuntime::process(request, len_vec).await;
+        let expected_action = match db_action {
+            DBAction::Get(_) => true,
+            _ => false,
+        };
+        assert!(expected_action);
+
+        let mut delete = DeleteRequest::new();
+        delete.key = "key".to_string();
+        let mut request = Request::new();
+        request.set_delete(delete);
+        let (_, db_action) = DBWorkerRuntime::process(request, len_vec).await;
+        let expected_action = match db_action {
+            DBAction::Delete(_) => true,
+            _ => false,
+        };
+        assert!(expected_action);
+    }
+}
