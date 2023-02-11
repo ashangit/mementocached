@@ -6,7 +6,6 @@ use mementocached::runtime::db::DBManagerRuntime;
 use mementocached::runtime::socket::SocketReaderRuntime;
 use mementocached::Error;
 
-// TODO each thread manage it's own hashmap
 fn main() -> Result<(), Error> {
     // install global collector configured based on RUST_LOG env var.
     tracing_subscriber::fmt::init();
@@ -48,13 +47,13 @@ fn main() -> Result<(), Error> {
     }
 
     // Init worker managing the DB
-    let mut db_mgr_rt: DBManagerRuntime = DBManagerRuntime::new(worker_threads)?;
+    let mut db_mgr_rt: DBManagerRuntime = DBManagerRuntime::new(worker_threads);
     db_mgr_rt.start()?;
 
     // Init socket reader runtime
-    let mut socket_reader_rt =
-        SocketReaderRuntime::new(format!("127.0.0.1:{port}"), db_mgr_rt.workers_channel)?;
-    socket_reader_rt.start()?;
+    SocketReaderRuntime::new(format!("127.0.0.1:{port}"), db_mgr_rt.sockets_db_workers_tx)
+        .start()
+        .unwrap();
 
     // Init core runtime
     let mut core_rt = CoreRuntime::new(http_port)?;

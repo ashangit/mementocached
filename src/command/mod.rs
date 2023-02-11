@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use ahash::{HashMap, HashMapExt};
 use protobuf::Message;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::debug;
 

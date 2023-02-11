@@ -1,8 +1,9 @@
-use crate::Error;
 use bytes::BytesMut;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use tracing::{debug, error};
+
+use crate::Error;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectionError {
