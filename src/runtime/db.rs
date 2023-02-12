@@ -1,5 +1,4 @@
-use std::hash::Hasher;
-use std::hash::{BuildHasher, Hash};
+use std::hash::Hash;
 use std::thread;
 
 use ahash::RandomState;
@@ -14,6 +13,8 @@ use crate::protos::kv;
 use crate::protos::kv::Request;
 use crate::runtime::socket::ClientStream;
 use crate::{Error, Responder};
+
+const HASHER: RandomState = RandomState::with_seeds(0, 0, 0, 0);
 
 pub struct DBManagerRuntime {
     nb_workers: usize,
@@ -103,6 +104,7 @@ impl DBManagerRuntime {
 struct DBWorkerRuntime {
     worker_id: usize,
     db: DB,
+
     db_action_rx: mpsc::Receiver<CommandProcess>,
     sockets_db_workers_rx: async_channel::Receiver<ClientStream>,
 }
@@ -265,13 +267,7 @@ impl DBWorkerRuntime {
     }
 
     fn calculate_modulo<T: Hash>(t: T, len_vec: usize) -> usize {
-        Self::calculate_hash(t) % len_vec
-    }
-
-    fn calculate_hash<T: Hash>(t: T) -> usize {
-        let mut hasher = RandomState::with_seeds(0, 0, 0, 0).build_hasher();
-        t.hash(&mut hasher);
-        hasher.finish() as usize
+        HASHER.hash_one(t) as usize % len_vec
     }
 }
 
